@@ -8,6 +8,7 @@ from torchvision import transforms
 from tqdm import tqdm
 from torch.utils.tensorboard import SummaryWriter
 
+from models.backbone.ResNet.resnet_model import resnext50_32x4d, resnet50, resnet34
 from dataset.transformer_cls import TransformerCls, TransformerClsVal, TransformerClsTTA
 from dataset.dataset_cls import OralDatasetCls, collate
 from utils.metrics import AverageMeter
@@ -72,7 +73,9 @@ dataloader_val = torch.utils.data.DataLoader(dataset_val, num_workers=num_worker
 
 ###################################
 print("creating models......")
-model = create_model_load_weights(n_class, evaluation=False, ckpt_path=args.ckpt_path)
+# model = resnet50(pretrained=True, num_classes=n_class)
+model = resnet34(pretrained=True, num_classes=n_class)
+model = create_model_load_weights(model, evaluation=False, ckpt_path=args.ckpt_path)
 
 ###################################
 num_epochs = args.epochs
@@ -111,6 +114,7 @@ for epoch in range(num_epochs):
         loss = trainer.train(sample, model)
         train_loss += loss.item()
         scores_train = trainer.get_scores()
+        # print(scores_train)
 
         batch_time.update(time.time()-start_time)
         start_time = time.time()
@@ -160,14 +164,16 @@ for epoch in range(num_epochs):
             log = ""
             log = log + 'epoch [{}/{}] macro_f1: train = {:.4f}, val = {:.4f}'.format(epoch+1, num_epochs, scores_train['macro_f1'], scores_val['macro_f1']) + "\n"
             log = log + "[train] F1 = " + str(scores_train['f1']) + "\n"
+            log = log + "[train] iou = " + str(scores_train['iou']) + "\n"
             log = log + "[train] precision = " + str(scores_train['precision'])  + "\n"
             log = log + "[train] recall = " + str(scores_train['recall']) + "\n"
-            log = log + "[train] macro_precision = {:.3f}, macro_recall = {:.3f}".format(scores_train['macro_precision'], scores_train['macro_recall']) + "\n"
+            log = log + "[train] mIOU = {:.3f}, macro_precision = {:.3f}, macro_recall = {:.3f}".format(scores_train['mIOU'], scores_train['macro_precision'], scores_train['macro_recall']) + "\n"
             log = log + "------------------------------------ \n"
             log = log + "[val] F1 = " + str(scores_val['f1']) + "\n"
+            log = log + "[val] iou = " + str(scores_val['iou']) + "\n"
             log = log + "[val] precision = " + str(scores_val['precision'])  + "\n"
             log = log + "[val] recall = " + str(scores_val['recall']) + "\n"
-            log = log + "[val] macro_precision = {:.3f}, macro_recall = {:.3f}".format(scores_val['macro_precision'], scores_val['macro_recall']) + "\n"
+            log = log + "[val] mIOU = {:.3f}, macro_precision = {:.3f}, macro_recall = {:.3f}".format(scores_val['mIOU'], scores_val['macro_precision'], scores_val['macro_recall']) + "\n"
             log = log + "----------------------------------- \n"
             log += "================================\n"
             print(log)
@@ -176,6 +182,7 @@ for epoch in range(num_epochs):
             f_log.write(log)
             f_log.flush()
             writer.add_scalars('macro_f1', {'train f1': scores_train['macro_f1'], 'validation f1': scores_val['macro_f1']}, epoch)
+            writer.add_scalars('recall_tm', {'train recall_tm': scores_train['recall'][1], 'val recall_tm': scores_val['recall'][1]}, epoch)
 
 if not evaluation: 
     f_log.close()
