@@ -11,6 +11,7 @@ ImageFile.LOAD_TRUNCATED_IMAGES = True
 
 
 TransformerCls = albumentations.Compose([
+    albumentations.Resize(224, 224),
     albumentations.RandomRotate90(p=0.5),
     albumentations.Transpose(p=0.5),
     albumentations.Flip(p=0.5),
@@ -31,11 +32,13 @@ TransformerCls = albumentations.Compose([
 ])
 
 TransformerClsVal = albumentations.Compose([
+    albumentations.Resize(224, 224),
     albumentations.Normalize(mean=[0.798, 0.621, 0.841], std=[0.125, 0.228, 0.089]),
     ToTensor(),
 ])
 
 TransformerClsTTA = albumentations.Compose([
+    albumentations.Resize(224, 224),
     albumentations.RandomRotate90(p=1),
     albumentations.Normalize(mean=[0.798, 0.621, 0.841], std=[0.125, 0.228, 0.089]),
     ToTensor(),
