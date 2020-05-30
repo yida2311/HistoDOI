@@ -39,18 +39,22 @@ class ConfusionMatrixCls(object):
 
         precision = TP / (TP + FP)
         recall = TP / (TP + FN)
-        f1 = 2 * precision * recall / (precision + recall)
+        f1 = 2 * TP / (2*TP + FP + FN)
+        iou = TP / (TP + FP + FN)
 
         macro_precision = np.mean(precision)
         macro_recall = np.mean(recall)
         macro_f1 = np.mean(f1)
+        mean_iou = np.mean(iou)
 
         return {"precision": precision,
                 "recall": recall,
                 "f1": f1,
+                'iou': iou,
                 "macro_precision": macro_precision,
                 "macro_recall": macro_recall,
                 "macro_f1": macro_f1,
+                "mIOU": mean_iou,
                 }
     
     def reset(self):
@@ -90,12 +94,17 @@ class ConfusionMatrixSeg(object):
         # accuracy is recall/sensitivity for each class, predicted TP / all real positives
         # axis in sum: perform summation along
         acc = np.nan_to_num(np.diag(hist) / hist.sum(axis=1))
-        acc_mean = np.mean(np.nan_to_num(acc))
+        acc_mean = np.mean(np.nan_to_num(acc[1:]))
         
         intersect = np.diag(hist)
         union = hist.sum(axis=1) + hist.sum(axis=0) - np.diag(hist)
         iou = intersect / union
-        mean_iou = np.mean(np.nan_to_num(iou))
+        mean_iou = np.mean(np.nan_to_num(iou[1:]))
+        
+        dice = 2 * intersect / (hist.sum(axis=1) + hist.sum(axis=0))
+        mean_dice = np.mean(np.nan_to_num(dice[1:]))
+
+        
         
         freq = hist.sum(axis=1) / hist.sum() # freq of each target
         # fwavacc = (freq[freq > 0] * iou[freq > 0]).sum()
@@ -106,6 +115,8 @@ class ConfusionMatrixSeg(object):
                 'freqw_iou': freq_iou,
                 'iou': iou, 
                 'iou_mean': mean_iou, 
+                'dice': dice,
+                'dice_mean': mean_dice,
                 # 'IoU_threshold': np.mean(np.nan_to_num(self.iou_threshold)),
                 }
 
