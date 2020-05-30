@@ -43,6 +43,7 @@ class OralDatasetCls(Dataset):
         sample['image'] = img
 
         if self.label:
+            # label = 0 if info['target']==1 else 1
             label = info['target'] - 1
             sample['label'] = label
         
@@ -74,6 +75,22 @@ class OralSlideCls(Dataset):
         self.slide_mask = None
         self.slide_size = None
         self.samples = []
+
+    def get_slide_mask_from_index(self, index):
+        slide = self.slides[index]
+        slide_dir = os.path.join(self.data_dir, slide)
+        samples = os.listdir(slide_dir)
+
+        tiles = self.info[slide]['tiles']
+        slide_size = tuple(tiles)
+        slide_mask = np.zeros(tuple(tiles), dtype='uint8')
+
+        for c in samples:
+            ver, col, target = self._parse_patch_name(c)
+            # target = 1 if target==1 else 2
+            slide_mask[ver, col] = target
+        
+        return slide_mask
     
     def get_patches_from_index(self, index):
         self.slide = self.slides[index]
@@ -134,6 +151,7 @@ def collate(batch):
     batch_dict = {}
     for key in batch[0].keys():
         batch_dict[key] = [b[key] for b in batch]
+    
     batch_dict['image'] = torch.stack(batch_dict['image'], dim=0)
     batch_dict['label'] = torch.tensor(batch_dict['label'], dtype=torch.long)
 
