@@ -17,14 +17,17 @@ class FPN_Bilinear(nn.Module):
         self.head = FPN_SF(num_classes, expansion=4, mode='Bilinear')
     
     def forward(self, img):
+        _, _, H, W = img.size()
         c2, c3, c4, c5 = self.backbone(img)
         output = self.head(c2, c3, c4, c5)
+        output = F.interpolate(output, size=(H, W), mode='bilinear')
 
         return output
 
 
 def fpn_bilinear_resnet50(num_classes):
-    model = FPN_Bilinear(num_classes=num_classes, backbone=resnet_dilated_50)
+    backbone = resnet_dilated_50(pretrained=True)
+    model = FPN_Bilinear(num_classes=num_classes, backbone=backbone)
     
     return model
 
