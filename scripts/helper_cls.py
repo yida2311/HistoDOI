@@ -17,15 +17,13 @@ def get_optimizer(model, learning_rate=1e-2):
     optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate, weight_decay=5e-4)
     return optimizer
 
-def create_model_load_weights(n_class, evaluation=False, ckpt_path=None):
+def create_model_load_weights(model, evaluation=False, ckpt_path=None):
     if evaluation and ckpt_path:
-        model = resnet50(pretrained=True, num_classes=n_class)
-        state_dict = torch.load(ckpt_path)()
+        state_dict = torch.load(ckpt_path) #()
         model_dict = model.state_dict()
         state_dict = {k:v for k, v in state_dict.items() if k in model_dict}
         model.load_state_dict(state_dict)
-    else:
-        model = resnet50(pretrained=True, num_classes=n_class)
+
     model = model.cuda()
 
     return model
@@ -105,10 +103,9 @@ class Evaluator(object):
 
 
 class SlideEvaluator(object):
-    def __init__(self, n_class, output):
+    def __init__(self, n_class):
         self.metrics = ConfusionMatrixSeg(n_class+1)
         self.n_class = n_class
-        self.output = output
     
     def get_scores(self):
         return self.metrics.get_scores()
@@ -119,7 +116,7 @@ class SlideEvaluator(object):
     def update_scores(self, mask, output):
         self.metrics.update(mask, output)
     
-    def eval(self, sample, model):
+    def eval(self, sample, model, output):
         imgs = sample['image']
         coord = sample['coord']
         with torch.no_grad():
@@ -129,7 +126,9 @@ class SlideEvaluator(object):
             predictions = np.argmax(outputs, axis=1)
 
             for i in range(imgs.shape[0]):
-                self.output[coord[i][0], coord[i][1]] = predictions[i] + 1
+                output[coord[i][0], coord[i][1]] = predictions[i] + 1
+        
+        return output
     
     
     
