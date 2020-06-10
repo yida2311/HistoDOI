@@ -84,8 +84,8 @@ class FPN_SF(nn.Module):
             p3 = self.fam3_ext(p3, p2)
         else:
             p4 = self._upsample_add(p5, self.laterlayer1(c4))
-            p3 = self._upsample_add(p4, self.laterlayer1(c3))
-            p2 = self._upsample_add(p3, self.laterlayer1(c2))
+            p3 = self._upsample_add(p4, self.laterlayer2(c3))
+            p2 = self._upsample_add(p3, self.laterlayer3(c2))
             # Smooth
             p4 = self.smooth1(p4)
             p3 = self.smooth2(p3)
