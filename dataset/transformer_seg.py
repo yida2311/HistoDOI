@@ -42,8 +42,12 @@ def TransformerSegVal(image=None, mask=None):
         albumentations.Normalize(mean=[0.798, 0.621, 0.841], std=[0.125, 0.228, 0.089]),
         ToTensor(),
     ])
-    result = img_trans(image=img)
-    result['mask'] = torch.tensor(result['mask'], dtype=torch.long)
+    result = img_trans(image=image)
+    if mask is not None:
+        result['mask'] = torch.tensor(mask, dtype=torch.long)
+        # print(result['mask'].size())
+        # print(result['mask'].mean())
+        # print(result['mask'].max())
 
     return result
 
