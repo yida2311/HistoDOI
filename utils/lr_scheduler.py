@@ -19,6 +19,8 @@ class LR_Scheduler(object):
 
     Poly mode: ``lr = baselr * (1 - iter/maxiter) ^ 0.9``
 
+    YM mode
+
     Args:
         args:  :attr:`args.lr_scheduler` lr scheduler mode (`cos`, `poly`),
           :attr:`args.lr` base learning rate, :attr:`args.epochs` number of epochs,
@@ -38,6 +40,7 @@ class LR_Scheduler(object):
         self.N = num_epochs * iters_per_epoch
         self.epoch = -1
         self.warmup_iters = warmup_epochs * iters_per_epoch
+        self.thr = [10, 60]
 
     def __call__(self, optimizer, i, epoch, best_pred):
         T = epoch * self.iters_per_epoch + i
@@ -47,6 +50,13 @@ class LR_Scheduler(object):
             lr = self.lr * pow((1 - 1.0 * T / self.N), 0.9)
         elif self.mode == 'step':
             lr = self.lr * (0.1 ** (epoch // self.lr_step))
+        elif self.mode == 'ym':
+            scale = 1
+            if epoch >= self.thr[0]:
+                scale = 0.1 * scale
+                if epoch >= self.thr[1]:
+                    scale = scale * (0.9 ** (epoch-self.thr[1]))
+            lr = self.lr * scale
         else:
             raise NotImplemented
         # warm up lr schedule
