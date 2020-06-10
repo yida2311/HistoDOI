@@ -26,7 +26,7 @@ class FPN_Bilinear(nn.Module):
 
 
 def fpn_bilinear_resnet50(num_classes):
-    backbone = resnet_dilated_50(pretrained=True)
+    backbone = resnet_dilated_50(pretrained=False)
     model = FPN_Bilinear(num_classes=num_classes, backbone=backbone)
     
     return model
