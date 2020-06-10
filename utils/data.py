@@ -29,9 +29,10 @@ def RGB_mapping_to_class(label):
 
 def class_to_RGB(label):
     h, w = label.shape[0], label.shape[1]
-    colmap = np.zeros(shape=(h, w, 3)).astype(np.float32)
+    colmap = np.zeros(shape=(h, w, 3)).astype(np.uint8)
 
     indices = np.where(label == 1)
+    print(indices)
     colmap[indices[0].tolist(), indices[1].tolist(), :] = [255, 0, 0]
     indices = np.where(label == 2)
     colmap[indices[0].tolist(), indices[1].tolist(), :] = [0, 255, 0]
@@ -86,3 +87,31 @@ def collate(batch):
             batch_dict[key] = torch.stack(batch_dict[key], dim=0)
 
     return batch_dict
+
+
+def boundary_patch_parser(mask, width=3):
+    tumor = np.array(mask==3, dtype='uint8')
+    mucosa = np.array(mask==2, dtype='uint8')
+    # get contours
+    tumor_contour = get_contour(tumor, thresh=0)
+    mucosa_contour = get_contour(mucosa, thresh=0)
+    # poly contours
+    target = np.zeros_like(mask)
+    target = cv2.polylines(target, tumor_contour, True, 1, 1)
+    target = cv2.polylines(target, mucosa_contour, True, 1, 1)
+    # dilate contours and get indices
+    target = cv2.dilate(target, kernel=np.ones((3, 3), dtype=np.uint8), iterations=1)
+    indices = np.where(target==1)
+    indices = [(h, w) for h, w in zip(indices[0], indices[1])]
+
+    return indices
+
+
+def get_contour(img, thresh=1):
+    """
+    img: 单通道图像
+    save_dir: optional
+    """
+    _, thresh = cv2.threshold(img, thresh, 255, cv2.THRESH_BINARY)
+    contours, hierarchy = cv2.findContours(thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
+    return contours
