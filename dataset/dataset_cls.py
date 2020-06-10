@@ -43,8 +43,8 @@ class OralDatasetCls(Dataset):
         sample['image'] = img
 
         if self.label:
-            # label = 0 if info['target']==1 else 1
-            label = info['target'] - 1
+            label = 0 if info['target']==1 else 1
+            # label = info['target'] - 1
             sample['label'] = label
         
         return sample
