@@ -29,21 +29,21 @@ class LR_Scheduler(object):
         iters_per_epoch: number of iterations per epoch
     """
     def __init__(self, mode, base_lr, num_epochs, iters_per_epoch=0,
-                 lr_step=0, warmup_epochs=0):
+                 lr_step=0, warmup_epochs=0.0):
         self.mode = mode
         print('Using {} LR Scheduler!'.format(self.mode))
         self.lr = base_lr
         if mode == 'step':
             assert lr_step
-        self.lr_step = lr_step
+        self.lr_step = lr_step  # for mode: step
         self.iters_per_epoch = iters_per_epoch
-        self.N = num_epochs * iters_per_epoch
+        self.N = num_epochs * iters_per_epoch  # overall iterations
         self.epoch = -1
-        self.warmup_iters = warmup_epochs * iters_per_epoch
-        self.thr = [10, 60]
+        self.warmup_iters = int(warmup_epochs * iters_per_epoch)
+        self.thr = [10, 60]  # for mode: ym
 
     def __call__(self, optimizer, i, epoch, best_pred):
-        T = epoch * self.iters_per_epoch + i
+        T = epoch * self.iters_per_epoch + i # iter index
         if self.mode == 'cos':
             lr = 0.5 * self.lr * (1 + math.cos(1.0 * T / self.N * math.pi))
         elif self.mode == 'poly':
@@ -75,7 +75,8 @@ class LR_Scheduler(object):
         else:
             # enlarge the lr at the head
             for i in range(len(optimizer.param_groups)):
-                if optimizer.param_groups[i]['lr'] > 0: optimizer.param_groups[i]['lr'] = lr
+                if optimizer.param_groups[i]['lr'] > 0: 
+                    optimizer.param_groups[i]['lr'] = lr
             # optimizer.param_groups[0]['lr'] = lr
             # for i in range(1, len(optimizer.param_groups)):
             #     optimizer.param_groups[i]['lr'] = lr * 10
