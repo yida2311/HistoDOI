@@ -80,9 +80,10 @@ model = create_model_load_weights(model, evaluation=False, ckpt_path=args.ckpt_p
 ###################################
 num_epochs = args.epochs
 learning_rate = args.lr
+warmup_epochs = args.warmup_epochs
 
 optimizer = get_optimizer(model, learning_rate=learning_rate)
-scheduler = LR_Scheduler('poly', learning_rate, num_epochs, len(dataloader_train))
+scheduler = LR_Scheduler(args.scheduler, learning_rate, num_epochs, len(dataloader_train), warmup_epochs=warmup_epochs)
 ##################################
 
 # criterion1 = FocalLoss(gamma=3)
