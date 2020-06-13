@@ -17,6 +17,8 @@ class Options():
         parser = argparse.ArgumentParser(description='PyTorch Segmentation')
         # model and dataset 
         parser.add_argument('--n_class', type=int, default=4, help='segmentation classes')
+        parser.add_argument('--scheduler', type=str, default='poly', help='learning rate scheduler')
+        parser.add_argument('--warmup_epochs', type=float, default=0, help='warmup epochs')
         parser.add_argument('--img_path_train', type=str, help='path to train dataset where images store')
         parser.add_argument('--mask_path_train', type=str, help='path to train dataset where masks store')
         parser.add_argument('--meta_path_train', type=str, help='path to train meta_file where images name store')

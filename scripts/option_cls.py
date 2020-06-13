@@ -6,6 +6,8 @@ class Options():
         parser = argparse.ArgumentParser(description='HistoDOI Classification')
         
         parser.add_argument('--n_class', type=int, default=3, help='classification classes')
+        parser.add_argument('--scheduler', type=str, default='poly', help='learning rate scheduler')
+        parser.add_argument('--warmup_epochs', type=float, default=0, help='warmup epochs')
         parser.add_argument('--data_path_train', type=str, help='path to train dataset ')
         parser.add_argument('--meta_path_train', type=str, help='path to train meta_file')
         parser.add_argument('--data_path_val', type=str, help='path to val dataset ')
