@@ -14,7 +14,8 @@ from utils.metrics import AverageMeter, ConfusionMatrixCls, ConfusionMatrixSeg
 
 
 def get_optimizer(model, learning_rate=1e-2):
-    optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate, weight_decay=5e-4)
+    # optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate, weight_decay=5e-4)
+    optimizer = torch.optim.SGD(model.parameters(), lr=learning_rate, weight_decay=1e-4)
     return optimizer
 
 def create_model_load_weights(model, evaluation=False, ckpt_path=None):

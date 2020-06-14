@@ -2,8 +2,9 @@ import os
 import shutil
 from PIL import Image
 import numpy as np 
+import sys
+sys.path.append("../")
 from utils.data import boundary_patch_parser
-
 
 
 def boundary_patch_getter(slide, mask, src_dir, src_mask_dir, save_dir, save_mask_dir):
@@ -39,7 +40,7 @@ def boundary_patch_getter(slide, mask, src_dir, src_mask_dir, save_dir, save_mas
 def boundary_patch_getter_all(mask_dir, src_dir, src_mask_dir, save_dir, save_mask_dir):
     num = 0
     for c in os.listdir(mask_dir):
-        slide = '_' + c.split('_')[1]
+        slide = c.split('.')[0]
         print(slide)
         mask = np.array(Image.open(os.path.join(mask_dir, c)), dtype='uint8')
         
@@ -51,11 +52,11 @@ def boundary_patch_getter_all(mask_dir, src_dir, src_mask_dir, save_dir, save_ma
 
 
 if __name__ == '__main__':
-    mask_dir = '/media/ldy/e5a10f4e-18fd-4656-80d8-055bc4078655/OSCC-Tile/slide/mask/val_mask_5x_224'
-    src_dir = '/media/ldy/e5a10f4e-18fd-4656-80d8-055bc4078655/OSCC-Tile/seg_5x/val_224'
-    src_mask_dir = '/media/ldy/e5a10f4e-18fd-4656-80d8-055bc4078655/OSCC-Tile/seg_5x/val_mask_224'
-    save_dir = '/media/ldy/e5a10f4e-18fd-4656-80d8-055bc4078655/OSCC-Tile/seg_5x/val_bd_224'
-    save_mask_dir = '/media/ldy/e5a10f4e-18fd-4656-80d8-055bc4078655/OSCC-Tile/seg_5x/val_bd_mask_224'
+    mask_dir = '/media/ldy/e5a10f4e-18fd-4656-80d8-055bc4078655/OSCC-Tile/slide/mask/val_512_mask_5x'
+    src_dir = '/media/ldy/e5a10f4e-18fd-4656-80d8-055bc4078655/OSCC-Tile/seg_5x/val_512'
+    src_mask_dir = '/media/ldy/e5a10f4e-18fd-4656-80d8-055bc4078655/OSCC-Tile/seg_5x/val_mask_512'
+    save_dir = '/media/ldy/e5a10f4e-18fd-4656-80d8-055bc4078655/OSCC-Tile/seg_5x/val_bd_512'
+    save_mask_dir = '/media/ldy/e5a10f4e-18fd-4656-80d8-055bc4078655/OSCC-Tile/seg_5x/val_bd_mask_512'
 
     boundary_patch_getter_all(mask_dir, src_dir, src_mask_dir, save_dir, save_mask_dir)
 
