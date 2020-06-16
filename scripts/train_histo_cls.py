@@ -9,6 +9,7 @@ from tqdm import tqdm
 from torch.utils.tensorboard import SummaryWriter
 
 from models.backbone.ResNet.resnet_model import resnext50_32x4d, resnet50, resnet34
+from models.backbone import seresnext50_32x4d
 from dataset.transformer_cls import TransformerCls, TransformerClsVal, TransformerClsTTA
 from dataset.dataset_cls import OralDatasetCls, collate
 from utils.metrics import AverageMeter
@@ -74,7 +75,8 @@ dataloader_val = torch.utils.data.DataLoader(dataset_val, num_workers=num_worker
 ###################################
 print("creating models......")
 # model = resnet50(pretrained=True, num_classes=n_class)
-model = resnet34(pretrained=True, num_classes=n_class)
+# model = resnet34(pretrained=True, num_classes=n_class)
+model = seresnext50_32x4d(pretrained=True, num_classes=n_class)
 model = create_model_load_weights(model, evaluation=False, ckpt_path=args.ckpt_path)
 
 ###################################
@@ -182,6 +184,7 @@ for epoch in range(num_epochs):
 
             f_log.write(log)
             f_log.flush()
+            writer.add_scalar('lr', optimizer.param_groups[0]['lr'], epoch)
             writer.add_scalars('macro_f1', {'train f1': scores_train['macro_f1'], 'validation f1': scores_val['macro_f1']}, epoch)
             writer.add_scalars('recall_tm', {'train recall_tm': scores_train['recall'][1], 'val recall_tm': scores_val['recall'][1]}, epoch)
 
