@@ -21,11 +21,13 @@ class OralDatasetCls(Dataset):
     def __init__(self,
                 data_dir,
                 meta_file,
+                train=False,
                 label=True,  # True: has label
                 transform=None):
         super(OralDatasetCls, self).__init__()
 
         self.data_dir = data_dir
+        self.train = train
         self.label = label 
         self.transform = transform
 
@@ -43,14 +45,25 @@ class OralDatasetCls(Dataset):
         sample['image'] = img
 
         if self.label:
-            # label = 0 if info['target']==1 else 1
-            label = info['target'] - 1
+            if self.train:
+                label = self.parse_ratio(info['new_ratio'])
+                print(label)
+            else:
+                # label = 0 if info['target']==1 else 1
+                label = info['target'] - 1
             sample['label'] = label
         
         return sample
 
     def __len__(self):
         return len(self.samples)
+    
+    def parse_ratio(self, ratio: str):
+        ratio = ratio[1:].split(' ')
+        assert len(ratio) == 3
+        res = [float(c[:-1]) for c in ratio]
+        return torch.tensor(res, dtype=torch.float)
+
 
 
 class OralSlideCls(Dataset):
@@ -153,7 +166,10 @@ def collate(batch):
         batch_dict[key] = [b[key] for b in batch]
     
     batch_dict['image'] = torch.stack(batch_dict['image'], dim=0)
-    batch_dict['label'] = torch.tensor(batch_dict['label'], dtype=torch.long)
+    if isinstance(batch_dict['label'][0], int):
+        batch_dict['label'] = torch.tensor(batch_dict['label'], dtype=torch.long)
+    else:
+        batch_dict['label'] = torch.stack(batch_dict['label'], dim=0)
 
     return batch_dict
 
