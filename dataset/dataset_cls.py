@@ -47,7 +47,7 @@ class OralDatasetCls(Dataset):
         if self.label:
             if self.train:
                 label = self.parse_ratio(info['new_ratio'])
-                print(label)
+                # print(label)
             else:
                 # label = 0 if info['target']==1 else 1
                 label = info['target'] - 1
