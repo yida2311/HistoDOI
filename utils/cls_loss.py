@@ -24,7 +24,7 @@ class CrossEntropyLoss(nn.Module):
         targets += res 
 
         logits = F.log_softmax(inputs, dim=1)
-        loss = torch.mul(logits, targets)
+        loss = - torch.mul(logits, targets)
 
         if self.size_average:
             loss = loss.mean()
