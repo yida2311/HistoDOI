@@ -95,7 +95,7 @@ scheduler = LR_Scheduler(args.scheduler, learning_rate, num_epochs, len(dataload
 
 # criterion1 = FocalLoss(gamma=3)
 # criterion = nn.CrossEntropyLoss(reduction='mean')
-criterion = nn.CrossEntropyLoss()  # label smooth
+criterion = CrossEntropyLoss()  # label smooth
 # criterion = lambda x, y: criterion1(x, y)
 
 if not evaluation:
