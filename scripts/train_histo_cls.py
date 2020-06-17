@@ -14,9 +14,14 @@ from dataset.transformer_cls import TransformerCls, TransformerClsVal, Transform
 from dataset.dataset_cls import OralDatasetCls, collate
 from utils.metrics import AverageMeter
 from utils.lr_scheduler import LR_Scheduler
+from utils.cls_loss import CrossEntropyLoss
 from helper_cls import get_optimizer, Trainer, Evaluator, create_model_load_weights
 from option_cls import Options
 
+import urllib.request
+import ssl
+ssl._create_default_https_context = ssl._create_unverified_context
+response = urllib.request.urlopen('https://www.python.org')
 
 def seed_everything(seed):
     random.seed(seed)
@@ -66,10 +71,10 @@ data_time = AverageMeter("DataTime", ':3.3f')
 batch_time = AverageMeter("BatchTime", ':3.3f')
 
 transformer_train = TransformerCls
-dataset_train = OralDatasetCls(data_path_train, meta_path_train, label=True, transform=transformer_train)
+dataset_train = OralDatasetCls(data_path_train, meta_path_train, train=True, label=True, transform=transformer_train)
 dataloader_train = torch.utils.data.DataLoader(dataset_train, num_workers=num_workers, batch_size=batch_size, collate_fn=collate, shuffle=True, pin_memory=True)
 transformer_val = TransformerClsVal
-dataset_val = OralDatasetCls(data_path_val, meta_path_val, label=True, transform=transformer_val)
+dataset_val = OralDatasetCls(data_path_val, meta_path_val, train=False, label=True, transform=transformer_val)
 dataloader_val = torch.utils.data.DataLoader(dataset_val, num_workers=num_workers, batch_size=batch_size, collate_fn=collate, shuffle=False, pin_memory=True)
 
 ###################################
@@ -89,7 +94,8 @@ scheduler = LR_Scheduler(args.scheduler, learning_rate, num_epochs, len(dataload
 ##################################
 
 # criterion1 = FocalLoss(gamma=3)
-criterion = nn.CrossEntropyLoss(reduction='mean')
+# criterion = nn.CrossEntropyLoss(reduction='mean')
+criterion = nn.CrossEntropyLoss()  # label smooth
 # criterion = lambda x, y: criterion1(x, y)
 
 if not evaluation:
