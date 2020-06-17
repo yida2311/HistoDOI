@@ -49,7 +49,7 @@ class Trainer(object):
         model.train()
 
         imgs = imgs.cuda()
-        labels_npy = np.array(labels)
+        labels_npy = np.argmax(np.array(labels), axis=1)
         labels = labels.cuda()
 
         preds = model.forward(imgs)
