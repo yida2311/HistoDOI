@@ -12,8 +12,9 @@ from torch.utils.tensorboard import SummaryWriter
 from torch.utils.data import DataLoader
 from torchvision.transforms import ToTensor
 
-from models.segmentor.fpn import fpn_bilinear_resnet50
-from models.segmentor.unet import UNet
+# from models.segmentor.fpn import fpn_bilinear_resnet50
+# from models.segmentor.unet import UNet
+from models.segmentation_models_pytorch.seg_generator import generate_unet
 from dataset.transformer_seg import TransformerSeg, TransformerSegVal
 from dataset.dataset_seg import OralDatasetSeg, collate
 from utils.metrics import AverageMeter
@@ -88,7 +89,8 @@ dataloader_val = DataLoader(dataset_val, num_workers=num_workers, batch_size=bat
 ###################################
 print("creating models......")
 # model = fpn_bilinear_resnet50(num_classes=n_class)
-model = UNet(n_channels=3, n_classes=n_class)
+# model = UNet(n_channels=3, n_classes=n_class)
+model = generate_unet(num_classes=n_class, encoder_name='resnet34')
 model = create_model_load_weights(model, evaluation=False, ckpt_path=args.ckpt_path)
 
 ###################################

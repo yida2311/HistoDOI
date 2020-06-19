@@ -9,7 +9,7 @@ from tqdm import tqdm
 from torch.utils.tensorboard import SummaryWriter
 
 from models.backbone.ResNet.resnet_model import resnext50_32x4d, resnet50, resnet34
-from models.backbone import seresnext50_32x4d
+from models.backbone import seresnext50_32x4d, seresnext26_32x4d
 from dataset.transformer_cls import TransformerCls, TransformerClsVal, TransformerClsTTA
 from dataset.dataset_cls import OralDatasetCls, collate
 from utils.metrics import AverageMeter
