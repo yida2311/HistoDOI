@@ -407,6 +407,15 @@ class SENet(nn.Module):
             self.last_linear = nn.Linear(self.num_features * self.avg_pool.feat_mult(), num_classes)
         else:
             self.last_linear = None
+    
+    def forward_seg(self, x):
+        res = []
+        x = self.layer0(x)
+        x = self.layer1(x)
+        x = self.layer2(x)
+        x = self.layer3(x)
+        x = self.layer4(x)
+        return res
 
     def forward_features(self, x):
         x = self.layer0(x)
