@@ -2,25 +2,8 @@ import torch
 import torch.nn.functional as F 
 from torch import nn
 
-
-class DoubleConv(nn.Module):
-    """(convolution => [BN] => ReLU) * 2"""
-
-    def __init__(self, in_channels, out_channels, mid_channels=None):
-        super().__init__()
-        if not mid_channels:
-            mid_channels = out_channels
-        self.double_conv = nn.Sequential(
-            nn.Conv2d(in_channels, mid_channels, kernel_size=3, padding=1),
-            nn.BatchNorm2d(mid_channels),
-            nn.ReLU(inplace=True),
-            nn.Conv2d(mid_channels, out_channels, kernel_size=3, padding=1),
-            nn.BatchNorm2d(out_channels),
-            nn.ReLU(inplace=True)
-        )
-
-    def forward(self, x):
-        return self.double_conv(x)
+from models.backbone.ResNet.senet_model import seresnext50_32x4d, seresnext26_32x4d, seresnet34, seresnet50
+from base import Conv2dReLU, DoubleConv, Attention
 
 
 class Down(nn.Module):
@@ -112,4 +95,142 @@ class UNet(nn.Module):
         return logits
 
 
+class DecoderBlock(nn.Module):
+    def __init__(
+            self,
+            in_channels,
+            skip_channels,
+            out_channels,
+            use_batchnorm=True
+            attention_type=None, # 'scse'
+    ):
+        super().__init__()
+        self.conv1 = Conv2dReLU(
+            in_channels + skip_channels,
+            out_channels,
+            kernel_size=3,
+            padding=1,
+            use_batchnorm=use_batchnorm,
+        )
+        self.attention1 = Attention(attention_type, in_channels=in_channels + skip_channels)
+        self.conv2 = Conv2dReLU(
+            out_channels,
+            out_channels,
+            kernel_size=3,
+            padding=1,
+            use_batchnorm=use_batchnorm,
+        )
+        self.attention2 = Attention(attention_type, in_channels=out_channels)
 
+    def forward(self, x, skip=None):
+        x = F.interpolate(x, scale_factor=2, mode="nearest")
+        if skip is not None:
+            x = torch.cat([x, skip], dim=1)
+            x = self.attention1(x)
+        
+        x = self.conv1(x)
+        x = self.conv2(x)
+        x = self.attention2(x)
+        return x
+
+
+class SegmentationHead(nn.Sequential):
+
+    def __init__(self, in_channels, out_channels, kernel_size=3, upsampling=1):
+        conv2d = nn.Conv2d(in_channels, out_channels, kernel_size=kernel_size, padding=kernel_size // 2)
+        upsampling = nn.UpsamplingBilinear2d(scale_factor=upsampling) if upsampling > 1 else nn.Identity()
+        super().__init__(conv2d, upsampling)
+
+
+class CenterBlock(nn.Sequential):
+    def __init__(self, in_channels, out_channels, use_batchnorm=True):
+        conv1 = Conv2dReLU(
+            in_channels,
+            out_channels,
+            kernel_size=3,
+            padding=1,
+            use_batchnorm=use_batchnorm,
+        )
+        conv2 = Conv2dReLU(
+            out_channels,
+            out_channels,
+            kernel_size=3,
+            padding=1,
+            use_batchnorm=use_batchnorm,
+        )
+        super().__init__(conv1, conv2)
+
+
+class DynamicUNet(nn.Module):
+    def __init__(self, 
+                n_channels=3, 
+                n_classes=4, 
+                encoder_name='',
+                decoder_channels=[],
+                use_batchnorm=True,
+                attention_type='scse',
+                center=False,
+                ):
+        super(DynamicUNet, self).__init__()
+        self.n_channels = n_channels
+        self.n_classes = n_classes
+        self.bilinear =  bilinear
+
+        self.encoder = get_encoder(encoder_name, n_channels)
+        encoder_channels = [1024, 512, 256, 128, 64]
+        encoder_channels = encoder_channels[1:]  # remove first skip with same spatial resolution
+        encoder_channels = encoder_channels[::-1]  # reverse channels to start from head of encoder
+
+        head_channels = encoder_channels[0]
+        in_channels = [head_channels] + list(decoder_channels[:-1])
+        skip_channels = list(encoder_channels[1:]) + [0]
+        out_channels = decoder_channels
+
+        if center:
+            self.center = center
+        else:
+            self.center = nn.Identity()
+        
+        kwargs = dict(use_batchnorm=use_batchnorm, attention_type=attention_type)
+        self.decoder = nn.ModuleList([
+            DecoderBlock(in_ch, skip_ch, out_ch, **kwargs)
+            for in_ch, skip_ch, out_ch in zip(in_channels, skip_channels, out_channels)
+        ])
+
+        self.head = SegmentationHead(decoder_channels[-1], self.n_classes)
+
+    def _init_params(self):
+        for m in self.children():
+            if hasattr(m, 'weight'):
+                nn.init.normal_(m.weight, mean=0, std=0.01)
+            if hasattr(m, 'bias'):
+                nn.init.constant_(m.bias, 0)
+
+    def forward(self, x):
+        features = self.encoder.forward_seg(x)
+        features = features[1:]    # remove first skip with same spatial resolution
+        features = features[::-1]  # reverse channels to start from head of encoder
+
+        head = features[0]
+        skips = features[1:]
+
+        x = self.center(head)
+        for i, decoder_block in enumerate(self.decoder):
+            skip = skips[i] if i < len(skips) else None
+            x = decoder_block(x, skip)
+
+        x = self.head(x)
+        return x
+
+
+def get_encoder(encoder_name, in_channels):
+    if encoder_name == 'seresnext50_32x4d':
+        model = seresnext50_32x4d(pretrained=True, in_chans=in_channels, input_3x3=True)
+    elif encoder_name == 'seresnext26_32x4d':
+        model = seresnext26_32x4d(pretrained=True, in_chans=in_channels, input_3x3=True)
+    elif encoder_name == 'seresnet34':
+        model = seresnet34(pretrained=True, in_chans=in_channels, input_3x3=True)
+    elif encoder_name == 'seresnet50':
+        model = seresnet50(pretrained=True, in_chans=in_channels, input_3x3=True)
+    
+    return model
