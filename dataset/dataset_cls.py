@@ -50,9 +50,8 @@ class OralDatasetCls(Dataset):
                 # print(label)
             else:
                 # label = 0 if info['target']==1 else 1
-                label = info['target'] - 1
+                label = int(info['target'] - 1)
             sample['label'] = label
-        
         return sample
 
     def __len__(self):
