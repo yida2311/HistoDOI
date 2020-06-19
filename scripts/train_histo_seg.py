@@ -18,7 +18,7 @@ from dataset.transformer_seg import TransformerSeg, TransformerSegVal
 from dataset.dataset_seg import OralDatasetSeg, collate
 from utils.metrics import AverageMeter
 from utils.lr_scheduler import LR_Scheduler
-from utils.loss import FocalLoss
+from utils.seg_loss import FocalLoss
 from utils.lovasz_losses import lovasz_softmax
 from utils.data import class_to_RGB
 from helper_seg import Trainer, Evaluator, get_optimizer, create_model_load_weights
