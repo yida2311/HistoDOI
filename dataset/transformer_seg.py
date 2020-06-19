@@ -12,6 +12,7 @@ ImageFile.LOAD_TRUNCATED_IMAGES = True
 
 def TransformerSeg(image=None, mask=None):
     master = albumentations.Compose([
+        albumentations.RandomCrop(1024, 1024),
         albumentations.RandomRotate90(p=0.5),
         albumentations.Transpose(p=0.5),
         albumentations.Flip(p=0.5),
@@ -45,9 +46,6 @@ def TransformerSegVal(image=None, mask=None):
     result = img_trans(image=image)
     if mask is not None:
         result['mask'] = torch.tensor(mask, dtype=torch.long)
-        # print(result['mask'].size())
-        # print(result['mask'].mean())
-        # print(result['mask'].max())
 
     return result
 
