@@ -17,12 +17,11 @@ from utils.metrics import ConfusionMatrixSeg, AverageMeter
 
 def create_model_load_weights(model, evaluation=False, ckpt_path=None):
     if evaluation and ckpt_path:
-            state = model.state_dict()
-            state.update(torch.load(ckpt_path))
-            model.load_state_dict(state)
+        state = model.state_dict()
+        state.update(torch.load(ckpt_path))
+        model.load_state_dict(state)
     # model = nn.DataParallel(model)
-    model = model.cuda()
-
+    # model = model.cuda()
     return model
 
 def get_optimizer(model, learning_rate=2e-5):

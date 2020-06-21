@@ -6,7 +6,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 from models.segmentor.SemanticFlow.fpn_semantic_flow import FPN_SF
-from models.backbone.ResNet.resnet_dilated import resnet_dilated_50
+from models.classifier.ResNet.resnet_dilated import resnet_dilated_50
 
 
 class FPN_Bilinear(nn.Module):

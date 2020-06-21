@@ -38,6 +38,7 @@ class Options():
         parser.add_argument('--lr', type=float, default=1e-3, help='learning rate')
         # parser.add_argument('--size_crop', type=int, default=3200, help='size (in pixel) for cropped subslide global image')
         parser.add_argument('--ckpt_path', type=str, default="", help='name for seg model path')
+        parser.add_argument('--local_rank', type=int, default=0)
 
         # the parser
         self.parser = parser

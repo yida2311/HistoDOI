@@ -1,4 +1,4 @@
-import Unet 
+from .unet.model import Unet
 
 
 unet_cfg = {

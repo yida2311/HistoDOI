@@ -67,11 +67,7 @@ class ConfusionMatrixSeg(object):
 
     def __init__(self, n_classes):
         self.n_classes = n_classes
-        # axis = 0: target
-        # axis = 1: prediction
         self.confusion_matrix = np.zeros((n_classes, n_classes))
-        # self.iou = []
-        # self.iou_threshold = []
 
     def _fast_hist(self, label_true, label_pred, n_class):
         mask = (label_true >= 0) & (label_true < n_class)
@@ -100,12 +96,11 @@ class ConfusionMatrixSeg(object):
         union = hist.sum(axis=1) + hist.sum(axis=0) - np.diag(hist)
         iou = intersect / union
         mean_iou = np.mean(np.nan_to_num(iou[1:]))
+        tm_iou = np.mean(np.nan_to_num(iou[2:]))
         
         dice = 2 * intersect / (hist.sum(axis=1) + hist.sum(axis=0))
         mean_dice = np.mean(np.nan_to_num(dice[1:]))
 
-        
-        
         freq = hist.sum(axis=1) / hist.sum() # freq of each target
         # fwavacc = (freq[freq > 0] * iou[freq > 0]).sum()
         freq_iou = (freq * iou).sum()
@@ -115,6 +110,7 @@ class ConfusionMatrixSeg(object):
                 'freqw_iou': freq_iou,
                 'iou': iou, 
                 'iou_mean': mean_iou, 
+                "iou_tm": tm_iou,
                 'dice': dice,
                 'dice_mean': mean_dice,
                 # 'IoU_threshold': np.mean(np.nan_to_num(self.iou_threshold)),

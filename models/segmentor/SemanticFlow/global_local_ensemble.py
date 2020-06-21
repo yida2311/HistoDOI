@@ -1,7 +1,7 @@
 # from ...backbone import resnet50, resnet18
 # from ...backbone import resnet5_dilated_18 as resnet18
-from ...backbone import resnet_dilated_50 as resnet50
-from ...backbone import EfficientNetB0 as efficientnet
+from ...classifier import resnet_dilated_50 as resnet50
+from ...classifier import EfficientNetB0 as efficientnet
 from .fpn_semantic_flow import get_fpn_sf_global, get_fpn_sf_local
 from ...utils import Parallel2Single
 
