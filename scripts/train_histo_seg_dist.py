@@ -73,7 +73,7 @@ task_name = args.task_name
 print(task_name)
 
 save_dir = os.path.join(model_path, task_name)
-if not os.path.exists(save_dir):
+if not os.path.exists(save_dir) and local_rank==0:
     os.makedirs(save_dir)
 ###################################
 evaluation = args.evaluation
@@ -166,7 +166,7 @@ for epoch in range(num_epochs):
 
         if i_batch % 10 == 0 and local_rank==0:
             tbar.set_description('Train loss: %.4f; mIoU: %.4f; data time: %.2f; batch time: %.2f' % 
-                            (train_loss / (i_batch + 1), scores_train["iou_tm"], data_time.avg, batch_time.avg))
+                            (train_loss / (i_batch + 1), scores_train["iou_mean"], data_time.avg, batch_time.avg))
     
     if local_rank == 0:
         writer.add_scalar('loss', train_loss/len(tbar), epoch)
@@ -193,7 +193,7 @@ for epoch in range(num_epochs):
                 batch_time.update(time.time()-start_time)
                 if local_rank == 0:
                     tbar.set_description('mIoU: %.4f; data time: %.2f; batch time: %.2f' % 
-                                    (scores_val["iou_tm"], data_time.avg, batch_time.avg))
+                                    (scores_val["iou_mean"], data_time.avg, batch_time.avg))
 
                 if not test: # has label
                     masks = sample['mask'] # PIL images
@@ -224,24 +224,26 @@ for epoch in range(num_epochs):
             evaluator.reset_metrics()
 
             # save model
-            if scores_val['iou_tm'] > best_pred and local_rank==0:
-                best_pred = scores_val['iou_tm']
+            if scores_val['iou_mean'] > best_pred and local_rank==0:
+                best_pred = scores_val['iou_mean']
                 save_path = os.path.join(save_dir, task_name + '-' + str(epoch) + '-' + str(best_pred) + '.pth')
                 torch.save(model.state_dict(), save_path)
             
             # log   
             if local_rank == 0:
                 log = ""
-                log = log + 'epoch [{}/{}] mIoU: train = {:.4f}, val = {:.4f}'.format(epoch+1, num_epochs, scores_train['iou_tm'], scores_val['iou_tm']) + "\n"
+                log = log + 'epoch [{}/{}] mIoU: train = {:.4f}, val = {:.4f}'.format(epoch+1, num_epochs, scores_train['iou_mean'], scores_val['iou_mean']) + "\n"
                 log = log + "[train] IoU = " + str(scores_train['iou']) + "\n"
                 log = log + "[train] Dice = " + str(scores_train['dice']) + "\n"
                 log = log + "[train] Dice_mean = " + str(scores_train['dice_mean']) + "\n"
-                log = log + "[train] accuracy = " + str(scores_train['accuracy'])  + "\n"
+                log = log + "[train] Accuracy = " + str(scores_train['accuracy'])  + "\n"
+                log = log + "[train] Accuracy_mean = " + str(scores_train['accuracy_mean'])  + "\n"
                 log = log + "------------------------------------ \n"
                 log = log + "[val] IoU = " + str(scores_val['iou']) + "\n"
                 log = log + "[val] Dice = " + str(scores_val['dice']) + "\n"
                 log = log + "[val] Dice_mean = " + str(scores_val['dice_mean']) + "\n"
-                log = log + "[val] accuracy = " + str(scores_val['accuracy'])  + "\n"
+                log = log + "[val] Accuracy = " + str(scores_val['accuracy'])  + "\n"
+                log = log + "[val] Accuracy_mean = " + str(scores_val['accuracy_mean'])  + "\n"
                 log += "================================\n"
                 print(log)
             if evaluation: break  # one peoch
