@@ -5,7 +5,8 @@ import torch
 import cv2
 from tqdm import tqdm
 
-from models.segmentor.unet import UNet
+# from models.segmentor.unet import UNet
+from models.segmentation_models_pytorch.seg_generator import generate_unet
 from dataset.transformer_seg import TransformerSegVal
 from dataset.dataset_seg import OralSlideSeg, collate
 from utils.metrics import AverageMeter
@@ -51,8 +52,10 @@ dataset = OralSlideSeg(img_path, mask_path, meta_path, label=True, transform=tra
 
 ###################################
 print("creating models......")
-model = UNet(n_channels=3, n_classes=n_class)
+# model = UNet(n_channels=3, n_classes=n_class)
+model = generate_unet(num_classes=n_class, encoder_name='resnet34')
 model = create_model_load_weights(model, evaluation=True, ckpt_path=ckpt_path)
+model.cuda()
 
 f_log = open(log_path + task_name + "_test.log", 'w')
 #######################################
@@ -89,8 +92,6 @@ for i in tbar:
     # save result
     print(prediction.shape)
     output_rgb = class_to_RGB(prediction)
-    print(output_rgb.shape)
-    print(output_rgb[335:555, 22:24])
     mask_rgb = class_to_RGB(mask)
     output_rgb = cv2.cvtColor(output_rgb, cv2.COLOR_BGR2RGB)
     mask_rgb = cv2.cvtColor(mask_rgb, cv2.COLOR_BGR2RGB)
@@ -104,6 +105,7 @@ print(evaluator.metrics.confusion_matrix)
 log = ""
 log = log + str(task_name) + '   slide inference \n'
 log = log + "mIOU = " + str(scores['iou_mean']) + '\n'
+log = log + "tmIOU = " + str(scores['iou_tm']) + '\n'
 log = log + "IOU: " + str(scores['iou']) + '\n'
 log = log + "Dice: " + str(scores['dice']) + '\n'
 log += "================================\n"
