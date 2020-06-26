@@ -23,6 +23,7 @@ def create_model_load_weights(model, evaluation=False, ckpt_path=None):
         model.load_state_dict(state)
     return model
 
+
 def get_optimizer(model, learning_rate=2e-5):
     optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate, weight_decay=5e-4)
     return optimizer
@@ -62,6 +63,35 @@ class Trainer(object):
         self.metrics.update(masks_npy, predictions)
         
         return loss
+    
+    def train_schp(self, sample, model, schp_model, cycle_n):
+        model.train()
+        imgs = sample['image']
+        masks = sample['mask'].squeeze(1)
+
+        imgs = imgs.cuda()
+        masks_npy = np.array(masks)
+        masks = masks.cuda()
+
+        preds = model.forward(imgs)
+        # Online self correction cycle with label refinement
+        if cycle_n >= 1:
+            with torch.no_grad():
+                soft_preds = schp_model.forward(imgs)
+        else:
+            soft_preds = None 
+
+        loss = self.criterion(preds, soft_preds, masks, cycle_n)
+        loss.backward()
+        self.optimizer.step()
+        self.optimizer.zero_grad()
+
+        outputs = preds.cpu().detach().numpy()
+        predictions = np.argmax(outputs, axis=1)
+        self.metrics.update(masks_npy, predictions)
+        
+        return loss
+    
 
 
 class Evaluator(object):
@@ -134,7 +164,6 @@ class SlideEvaluator(object):
                 template[x:x+h, y:y+w] += np.ones((h, w), dtype='uint8')
         
         return output, template
-
 
 
 
