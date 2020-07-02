@@ -102,7 +102,7 @@ class CycleScheduler(_LRScheduler):
         self.cyclical_base_lr = cyclical_base_lr
         self.eta_min = eta_min
         self.warmup_epoch = warmup_epoch
-        self.iters_per_epoch = iters_per_epoch,
+        self.iters_per_epoch = iters_per_epoch
 
         self.warmup_iters = int(self.warmup_epoch * self.iters_per_epoch)
         self.cycle_iters = int(self.cyclical_epoch * self.iters_per_epoch)

@@ -1,9 +1,9 @@
 import torch.nn as nn
 import torch.nn.functional as F
 import torch
-from lovasz_loss import LovaszSoftmax
+from .lovasz_loss import LovaszSoftmax
 
-__all__ = ['CrossEntropyLoss2d', 'FocalLoss', 'SoftCrossEntropyLoss2d']
+__all__ = ['CriterionAll', 'CrossEntropyLoss2d', 'FocalLoss', 'SoftCrossEntropyLoss2d']
 
 
 class CriterionAll(nn.Module):
@@ -12,7 +12,7 @@ class CriterionAll(nn.Module):
         self.use_class_weight = use_class_weight
         self.criterion = nn.CrossEntropyLoss()
         self.lovasz = LovaszSoftmax()
-        self.kldiv = KLDivergenceLoss()
+        self.kldiv = KLDivergenceLoss(T=0.25)
         self.lamda = lamda
         self.num_classes = num_classes
     
@@ -26,15 +26,14 @@ class CriterionAll(nn.Module):
         Returns:
             Calculated Loss.
         """
-        h, w = masks.size(2), masks.size(3)
+        h, w = masks.size(1), masks.size(2)
 
-        loss = self.lovasz(preds, masks)
-        if soft_preds is None:
-            loss += self.lamda * self.criterion(preds, masks)
-        else:
+        # loss = self.lovasz(preds, masks)
+        loss = self.criterion(preds, masks)
+        if soft_preds is not None:
             soft_preds = moving_average(soft_preds, one_hot(masks, self.num_classes), alpha=1.0/(cycle_n+1))
             loss += self.lamda * self.kldiv(preds, soft_preds)
-        loss /= (self.lamda + 1)
+            loss /= (self.lamda + 1)
 
         return loss 
     
@@ -42,7 +41,7 @@ class CriterionAll(nn.Module):
         loss = self.parsing_loss(preds, soft_preds, masks, cycle_n=cycle_n)
         return loss 
 
-    def _generate_weights(self, masks, num_classes)
+    def _generate_weights(self, masks, num_classes):
         """
         masks: torch.Tensor with shape [B, H, W]
         """

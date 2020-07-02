@@ -1,6 +1,5 @@
 import os
 import torch
-import modules
 from torch.nn import SyncBatchNorm
 
 def moving_average(net1, net2, alpha=1):
@@ -46,8 +45,11 @@ def bn_re_estimate(loader, model):
     model.apply(lambda module: _get_momenta(module, momenta))
     n = 0
     for i_iter, batch in enumerate(loader):
-        images, labels, _ = batch
-        b = images.data.size(0)
+        # images, labels, _ = batch
+        # b = images.data.size(0)
+        images = batch['image']
+        b = images.size(0)
+        
         momentum = b / (n + b)
         for module in momenta.keys():
             module.momentum = momentum
@@ -56,13 +58,13 @@ def bn_re_estimate(loader, model):
     model.apply(lambda module: _set_momenta(module, momenta))
 
 
-def save_schp_checkpoint(states, is_best_parsing, output_dir, filename='schp_checkpoint.pth.tar'):
+def save_schp_checkpoint(states, is_best_parsing, output_dir, filename='schp_checkpoint.pth'):
     save_path = os.path.join(output_dir, filename)
     if os.path.exists(save_path):
         os.remove(save_path)
     torch.save(states, save_path)
     if is_best_parsing and 'state_dict' in states:
-        best_save_path = os.path.join(output_dir, 'model_parsing_best.pth.tar')
-        if os.path.exists(best_save_path):
-            os.remove(best_save_path)
+        best_save_path = os.path.join(output_dir, 'model_parsing_best.pth')
+        # if os.path.exists(best_save_path):
+        #     os.remove(best_save_path)
         torch.save(states, best_save_path)

@@ -7,6 +7,7 @@ Maxim Berman 2018 ESAT-PSI KU Leuven (MIT License)
 from __future__ import print_function, division
 
 import torch
+from torch import nn
 from torch.autograd import Variable
 import torch.nn.functional as F
 import numpy as np
@@ -244,4 +245,4 @@ class LovaszSoftmax(nn.Module):
 
     def forward(self, pred, label):
         pred = F.softmax(pred, dim=1)
-        return self.lovasz_softmax(pred, label, per_image=self.per_image, ignore=self.ignore_index, weighted=self.weighted)
+        return self.lovasz_softmax(pred, label, per_image=self.per_image, ignore=self.ignore_index)

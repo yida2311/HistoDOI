@@ -38,6 +38,7 @@ from option_seg import Options
 dist.init_process_group('nccl')
 # DPP 2
 local_rank = dist.get_rank()
+print(local_rank)
 torch.cuda.set_device(local_rank)
 device = torch.device('cuda', local_rank)
 
@@ -68,14 +69,15 @@ schp_model_path = os.path.join(args.schp_model_path, args.task_name)
 log_path = args.log_path
 output_path = args.output_path
 
-if not os.path.exists(model_path): 
-    os.makedirs(model_path)
-if not os.path.exists(schp_model_path): 
-    os.makedirs(schp_model_path)
-if not os.path.exists(log_path): 
-    os.makedirs(log_path)
-if not os.path.exists(output_path): 
-    os.makedirs(output_path)
+if local_rank == 0:
+    if not os.path.exists(model_path): 
+        os.makedirs(model_path)
+    if not os.path.exists(schp_model_path): 
+        os.makedirs(schp_model_path)
+    if not os.path.exists(log_path): 
+        os.makedirs(log_path)
+    if not os.path.exists(output_path): 
+        os.makedirs(output_path)
 
 task_name = args.task_name
 print(task_name)
@@ -131,9 +133,9 @@ scheduler = CycleScheduler(iters_per_epoch=len(dataloader_train), total_epoch=nu
 ##################################
 
 criterion1 = nn.CrossEntropyLoss()
-criterion2 = lovasz_softmax
+# criterion2 = lovasz_softmax
 criterion3 = CriterionAll(lamda=3, num_classes=n_class)
-criterion = lambda x,y: criterion3(x, y)
+criterion = criterion3
 
 if not evaluation and local_rank==0:
     writer = SummaryWriter(log_dir=log_path + task_name)
@@ -190,11 +192,11 @@ for epoch in range(num_epochs):
         print('Self-correction cycle number {}'.format(cycle_n))
         schp.moving_average(schp_model, model, 1.0 / (cycle_n + 1))
         cycle_n += 1
-        schp.bn_re_estimate(train_loader, schp_model)
+        # schp.bn_re_estimate(dataloader_train, schp_model)
         schp.save_schp_checkpoint({
             'state_dict': schp_model.state_dict(),
             'cycle_n': cycle_n,
-        }, False, schp_model_path, filename='schp_{}_checkpoint.pth.tar'.format(cycle_n))
+        }, False, schp_model_path, filename='schp_{}_checkpoint.pth'.format(cycle_n))
 
     if epoch % 1 == 0:
         with torch.no_grad():
