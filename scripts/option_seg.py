@@ -19,7 +19,7 @@ class Options():
         parser.add_argument('--n_class', type=int, default=4, help='segmentation classes')
         parser.add_argument('--scheduler', type=str, default='poly', help='learning rate scheduler')
         parser.add_argument('--warmup_epoch', type=float, default=0, help='warmup epoch')
-        parser.add_argument('--cyclic_epoch', type=int, help='cyclic epoch for training')
+        parser.add_argument('--cyclical_epoch', type=int, help='cyclic epoch for training')
         parser.add_argument('--img_path_train', type=str, help='path to train dataset where images store')
         parser.add_argument('--mask_path_train', type=str, help='path to train dataset where masks store')
         parser.add_argument('--meta_path_train', type=str, help='path to train meta_file where images name store')

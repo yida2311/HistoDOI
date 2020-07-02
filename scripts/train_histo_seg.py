@@ -20,7 +20,6 @@ from dataset.dataset_seg import OralDatasetSeg, collate
 from utils.metrics import AverageMeter
 from utils.lr_scheduler import LR_Scheduler
 from utils.seg_loss import FocalLoss
-from utils.lovasz_losses import lovasz_softmax
 from utils.data import class_to_RGB
 from helper_seg import Trainer, Evaluator, get_optimizer, create_model_load_weights
 from option_seg import Options
@@ -103,7 +102,7 @@ scheduler = LR_Scheduler('poly', learning_rate, num_epochs, len(dataloader_train
 
 criterion1 = FocalLoss(gamma=3)
 criterion2 = nn.CrossEntropyLoss()
-criterion3 = lovasz_softmax
+# criterion3 = lovasz_softmax
 criterion = lambda x,y: criterion2(x, y)
 
 if not evaluation:

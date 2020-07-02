@@ -14,18 +14,32 @@ from models.segmentor.fpn import fpn_bilinear_resnet50
 from models.utils import Parallel2Single
 from utils.metrics import ConfusionMatrixSeg, AverageMeter
 
-
 def create_model_load_weights(model, evaluation=False, ckpt_path=None):
     if evaluation and ckpt_path:
-        model = nn.DataParallel(model)
+        state_dict = torch.load(ckpt_path)
+        if 'module' in next(iter(state_dict)):
+            state_dict = Parallel2Single(state_dict)
         state = model.state_dict()
-        state.update(torch.load(ckpt_path))
+        state.update(state_dict)
+        model.load_state_dict(state)
+    return model
+
+
+def create_model_load_weights_v2(model, evaluation=False, ckpt_path=None):
+    if evaluation and ckpt_path:
+        state_dict = torch.load(ckpt_path)
+        print(state_dict)
+        if 'module' in next(iter(state_dict)):
+            state_dict = Parallel2Single(state_dict)
+        state = model.state_dict()
+        state.update(state_dict)
         model.load_state_dict(state)
     return model
 
 
 def get_optimizer(model, learning_rate=2e-5):
-    optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate, weight_decay=5e-4)
+    # optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate, weight_decay=5e-4)
+    optimizer = torch.optim.SGD(model.parameters(), lr=learning_rate, momentum=0.95, weight_decay=5e-4)
     return optimizer
 
 

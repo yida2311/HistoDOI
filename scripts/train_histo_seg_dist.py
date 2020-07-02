@@ -22,7 +22,6 @@ from dataset.dataset_seg import OralDatasetSeg, collate
 from utils.metrics import AverageMeter
 from utils.lr_scheduler import LR_Scheduler
 from utils.seg_loss import FocalLoss
-from utils.lovasz_losses import lovasz_softmax
 from utils.data import class_to_RGB
 from helper_seg import Trainer, Evaluator, get_optimizer, create_model_load_weights
 from option_seg import Options
@@ -58,7 +57,7 @@ meta_path_train = args.meta_path_train
 img_path_val = args.img_path_val
 mask_path_val = args.mask_path_val
 meta_path_val = args.meta_path_val
-model_path = args.model_path # save model
+model_path = os.path.join(args.model_path, args.task_name) # save model
 log_path = args.log_path
 output_path = args.output_path
 
@@ -71,10 +70,6 @@ if not os.path.exists(output_path):
 
 task_name = args.task_name
 print(task_name)
-
-save_dir = os.path.join(model_path, task_name)
-if not os.path.exists(save_dir) and local_rank==0:
-    os.makedirs(save_dir)
 ###################################
 evaluation = args.evaluation
 test = evaluation and False
@@ -121,8 +116,8 @@ scheduler = LR_Scheduler('poly', learning_rate, num_epochs, len(dataloader_train
 ##################################
 
 criterion1 = FocalLoss(gamma=3)
-criterion2 = nn.CrossEntropyLoss()
-criterion3 = lovasz_softmax
+criterion2 = nn.CrossEntropyLoss(reduction='mean')
+# criterion3 = lovasz_softmax
 criterion = lambda x,y: criterion2(x, y)
 
 if not evaluation and local_rank==0:
@@ -226,7 +221,7 @@ for epoch in range(num_epochs):
             # save model
             if scores_val['iou_mean'] > best_pred and local_rank==0:
                 best_pred = scores_val['iou_mean']
-                save_path = os.path.join(save_dir, task_name + '-' + str(epoch) + '-' + str(best_pred) + '.pth')
+                save_path = os.path.join(model_path, task_name + '-' + str(epoch) + '-' + str(best_pred) + '.pth')
                 torch.save(model.state_dict(), save_path)
             
             # log   
