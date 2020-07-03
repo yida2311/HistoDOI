@@ -27,8 +27,7 @@ def create_model_load_weights(model, evaluation=False, ckpt_path=None):
 
 def create_model_load_weights_v2(model, evaluation=False, ckpt_path=None):
     if evaluation and ckpt_path:
-        state_dict = torch.load(ckpt_path)
-        print(state_dict)
+        state_dict = torch.load(ckpt_path, map_location=torch.device('cpu'))['state_dict']
         if 'module' in next(iter(state_dict)):
             state_dict = Parallel2Single(state_dict)
         state = model.state_dict()
