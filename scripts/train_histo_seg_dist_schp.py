@@ -134,7 +134,7 @@ scheduler = CycleScheduler(iters_per_epoch=len(dataloader_train), total_epoch=nu
 
 criterion1 = nn.CrossEntropyLoss()
 # criterion2 = lovasz_softmax
-criterion3 = CriterionAll(lamda=3, num_classes=n_class)
+criterion3 = CriterionAll(lamda=2, num_classes=n_class)
 criterion = criterion3
 
 if not evaluation and local_rank==0:

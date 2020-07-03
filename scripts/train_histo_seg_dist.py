@@ -112,7 +112,7 @@ num_epochs = args.epochs
 learning_rate = args.lr
 
 optimizer = get_optimizer(model, learning_rate=learning_rate)
-scheduler = LR_Scheduler('poly', learning_rate, num_epochs, len(dataloader_train))
+scheduler = LR_Scheduler(args.scheduler, learning_rate, num_epochs, len(dataloader_train))
 ##################################
 
 criterion1 = FocalLoss(gamma=3)
