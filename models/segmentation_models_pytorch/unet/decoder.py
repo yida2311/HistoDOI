@@ -62,6 +62,99 @@ class CenterBlock(nn.Sequential):
         super().__init__(conv1, conv2)
 
 
+class PAM_Module(nn.Module):
+    """ Position attention module"""
+    #Ref from SAGAN
+    def __init__(self, in_dim):
+        super(PAM_Module, self).__init__()
+        self.chanel_in = in_dim
+
+        self.query_conv = nn.Conv2d(in_channels=in_dim, out_channels=in_dim//8, kernel_size=1)
+        self.key_conv = nn.Conv2d(in_channels=in_dim, out_channels=in_dim//8, kernel_size=1)
+        self.value_conv = nn.Conv2d(in_channels=in_dim, out_channels=in_dim, kernel_size=1)
+        self.gamma = nn.Parameter(torch.zeros(1))
+        self.softmax = nn.Softmax(dim=-1)
+        self.W = md.Conv2dReLU(in_dim, in_dim, kernel_size=3, padding=1, use_batchnorm=use_batchnorm)
+
+    def forward(self, x):
+        """
+            inputs :
+                x : input feature maps( B X C X H X W)
+            returns :
+                out : attention value + input feature
+                attention: B X (HxW) X (HxW)
+        """
+        m_batchsize, C, height, width = x.size()
+        proj_query = self.query_conv(x).view(m_batchsize, -1, width*height).permute(0, 2, 1)
+        proj_key = self.key_conv(x).view(m_batchsize, -1, width*height)
+        energy = torch.bmm(proj_query, proj_key)
+        attention = self.softmax(energy)
+        proj_value = self.value_conv(x).view(m_batchsize, -1, width*height)
+
+        out = torch.bmm(proj_value, attention.permute(0, 2, 1))
+        out = out.view(m_batchsize, C, height, width)
+
+        out = self.gamma*out + x
+        out = self.W(out)
+        return out
+
+
+class CAM_Module(Module):
+    """ Channel attention module"""
+    def __init__(self, in_dim):
+        super(CAM_Module, self).__init__()
+        self.chanel_in = in_dim
+        self.gamma = Parameter(torch.zeros(1))
+        self.softmax  = Softmax(dim=-1)
+        self.W = md.Conv2dReLU(in_dim, in_dim, kernel_size=3, padding=1, use_batchnorm=use_batchnorm)
+
+    def forward(self,x):
+        """
+            inputs :
+                x : input feature maps( B X C X H X W)
+            returns :
+                out : attention value + input feature
+                attention: B X C X C
+        """
+        m_batchsize, C, height, width = x.size()
+        proj_query = x.view(m_batchsize, C, -1)
+        proj_key = x.view(m_batchsize, C, -1).permute(0, 2, 1)
+        energy = torch.bmm(proj_query, proj_key)
+        energy_new = torch.max(energy, -1, keepdim=True)[0].expand_as(energy)-energy
+        attention = self.softmax(energy_new)
+        proj_value = x.view(m_batchsize, C, -1)
+
+        out = torch.bmm(attention, proj_value)
+        out = out.view(m_batchsize, C, height, width)
+
+        out = self.gamma*out + x
+        out = self.W(out)
+        return out
+
+
+class DAN_Module(nn.Module):
+    """Dual attention module """
+    def __init__(self, in_channels, out_channels, use_batchnorm=True):
+        super(DAN_Module, self).__init__()
+        inter_channels = in_channels / 4
+
+        self.pconv = md.Conv2dReLU(in_channels, inter_channels, kernel_size=3, padding=1, use_batchnorm=use_batchnorm)
+        self.cconv = md.Conv2dReLU(in_channels, inter_channels, kernel_size=3, padding=1, use_batchnorm=use_batchnorm)
+        self.sp = PAM_Module(inter_channels)
+        self.sc = CAM_Module(inter_channels)
+        self.fusion = nn.Conv2d(in_channels=inter_channels, out_channels=out_channels, kernel_size=1)
+
+    def forward(self, x):
+        p = self.pconv(x)
+        p = self.sp(p)
+
+        c = self.cconv(x)
+        c = self.sc(c)
+
+        out = self.fusion(p + c)
+        return out 
+
+
 class UnetDecoder(nn.Module):
     def __init__(
             self,
@@ -91,9 +184,10 @@ class UnetDecoder(nn.Module):
         out_channels = decoder_channels
 
         if center:
-            self.center = CenterBlock(
-                head_channels, head_channels, use_batchnorm=use_batchnorm
-            )
+            # self.center = CenterBlock(
+            #     head_channels, head_channels, use_batchnorm=use_batchnorm
+            # )
+            self.center = DAN_Module(head_channels, head_channels, use_batchnorm=use_batchnorm)
         else:
             self.center = nn.Identity()
 
