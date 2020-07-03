@@ -12,7 +12,7 @@ class CriterionAll(nn.Module):
         self.use_class_weight = use_class_weight
         self.criterion = nn.CrossEntropyLoss()
         self.lovasz = LovaszSoftmax()
-        self.kldiv = KLDivergenceLoss(T=0.25)
+        self.kldiv = KLDivergenceLoss(T=1)
         self.lamda = lamda
         self.num_classes = num_classes
     
@@ -31,6 +31,7 @@ class CriterionAll(nn.Module):
         # loss = self.lovasz(preds, masks)
         loss = self.criterion(preds, masks)
         if soft_preds is not None:
+            soft_preds = F.softmax(soft_preds)
             soft_preds = moving_average(soft_preds, one_hot(masks, self.num_classes), alpha=1.0/(cycle_n+1))
             loss += self.lamda * self.kldiv(preds, soft_preds)
             loss /= (self.lamda + 1)
@@ -69,7 +70,7 @@ class KLDivergenceLoss(nn.Module):
 
     def forward(self, input, target):
         log_input_prob = F.log_softmax(input / self.T, dim=1)
-        target_porb = F.softmax(target / self.T, dim=1)
+        # target_porb = F.softmax(target / self.T, dim=1)
         loss = F.kl_div(log_input_prob, target_porb)
         return self.T*self.T*loss # balanced
 
