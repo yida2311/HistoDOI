@@ -62,7 +62,8 @@ dataset = OralSlideSeg(img_path, mask_path, meta_path, label=True, transform=tra
 print("creating models......")
 # model = UNet(n_channels=3, n_classes=n_class)
 model = generate_unet(num_classes=n_class, encoder_name='resnet34')
-model = create_model_load_weights_v2(model, evaluation=True, ckpt_path=ckpt_path)
+# model = create_model_load_weights_v2(model, evaluation=True, ckpt_path=ckpt_path)
+model = create_model_load_weights(model, evaluation=True, ckpt_path=ckpt_path)
 model.cuda()
 
 f_log = open(log_path + task_name + "_test.log", 'w')

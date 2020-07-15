@@ -37,8 +37,8 @@ def create_model_load_weights_v2(model, evaluation=False, ckpt_path=None):
 
 
 def get_optimizer(model, learning_rate=2e-5):
-    # optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate, weight_decay=5e-4)
-    optimizer = torch.optim.SGD(model.parameters(), lr=learning_rate, momentum=0.95, weight_decay=5e-4)
+    optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate, weight_decay=5e-4)
+    # optimizer = torch.optim.SGD(model.parameters(), lr=learning_rate, momentum=0.9, weight_decay=1e-4)
     return optimizer
 
 
