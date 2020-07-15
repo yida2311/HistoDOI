@@ -3,10 +3,11 @@ import torch.nn.functional as F
 import torch
 from .lovasz_loss import LovaszSoftmax
 
-__all__ = ['CriterionAll', 'CrossEntropyLoss2d', 'FocalLoss', 'SoftCrossEntropyLoss2d']
+__all__ = ['CriterionAll', 'CrossEntropyLoss', 'FocalLoss', 'SoftCrossEntropyLoss2d']
 
 
 class CriterionAll(nn.Module):
+    """ For self-correction human parsing"""
     def __init__(self, use_class_weight=False, lamda=1, num_classes=4):
         super(CriterionAll, self).__init__()
         self.use_class_weight = use_class_weight
@@ -75,13 +76,93 @@ class KLDivergenceLoss(nn.Module):
         return self.T*self.T*loss # balanced
 
 
-class CrossEntropyLoss2d(nn.Module):
-    def __init__(self, weight=None, size_average=True, ignore_index=-100):
-        super(CrossEntropyLoss2d, self).__init__()
-        self.nll_loss = nn.NLLLoss(weight, size_average, ignore_index)
+class SymmetricCrossEntropyLoss(nn.Module):
+    def __init__(self, alpha, beta, num_classes=4, ignore_index=-100):
+        super(self, SymmetricCrossEntropyLoss).__init__()
+        self.alpha = alpha
+        self.beta = beta
+        self.ce_loss = CrossEntropyLoss()
+        self.rce_loss = ReverseCrossEntropyLoss(num_classes=num_classes)
+
+    def forward(self, inputs, targets):
+        ce = self.ce_loss(inputs, targets)
+        rce = self.rce_loss(inputs, targets)
+
+        loss = self.alpha * ce + self.beta * rce 
+        return loss
+
+
+class NormalizedSymmetricCrossEntropyLoss(nn.Module):
+    def __init__(self, alpha, beta, num_classes=4, ignore_index=-100):
+        super(self, NormalizedSymmetricCrossEntropyLoss).__init__()
+        self.alpha = alpha
+        self.beta = beta
+        self.nce_loss = NormalizedCrossEntropyLoss(num_classes=num_classes)
+        self.nrce_loss = NormalizedReverseCrossEntropyLoss(num_classes=num_classes)
+
+    def forward(self, inputs, targets):
+        nce = self.nce_loss(inputs, targets)
+        nrce = self.nrce_loss(inputs, targets)
+        
+        loss = self.alpha * nce + self.beta * nrce 
+        return loss
+
+class CrossEntropyLoss(nn.Module):
+    def __init__(self, ignore_index=-100):
+        super(CrossEntropyLoss, self).__init__()
+        self.nll_loss = nn.NLLLoss(ignore_index=ignore_index)
 
     def forward(self, inputs, targets):
         return self.nll_loss(F.log_softmax(inputs, dim=1), targets)
+
+
+class ReverseCrossEntropyLoss(nn.Module):
+    def __init__(self, num_classes=4, ignore_index=-100):
+        super(ReverseCrossEntropyLoss, self).__init__()
+        self.num_classes = num_classes
+
+    def forward(self, inputs, targets):
+        pred = F.softmax(inputs, dim=1)
+        pred = torch.clamp(pred, min=1e-7, max=1.0)
+
+        targets_one_hot = one_hot(targets, self.num_classes)
+        targets_one_hot = torch.clamp(targets_one_hot, min=1e-4, max=1.0)
+
+        loss = -1 * torch.sum(pred * torch.log(targets_one_hot), dim=1)
+
+        return loss.mean()
+
+
+class NormalizedCrossEntropyLoss(nn.Module):
+    def __init__(self, num_classes=4, ignore_index=-100):
+        super(NormalizedCrossEntropyLoss, self).__init__()
+        self.num_classes = num_classes
+
+    def forward(self, inputs, targets):
+        pred = F.log_softmax(inputs, dim=1)
+        targets_one_hot = one_hot(targets, self.num_classes)
+        ce =  -1 * torch.sum(targets_one_hot * pred, dim=1)
+        C = -1 * torch.sum(pred, dim=1)
+        nce = torch.div(ce, C)
+        return nce.mean()
+
+
+class NormalizedReverseCrossEntropyLoss(nn.Module):
+    def __init__(self, num_classes=4, ignore_index=-100):
+        super(NormalizedReverseCrossEntropyLoss, self).__init__()
+        self.num_classes = num_classes
+
+    def forward(self, inputs, targets):
+        pred = F.softmax(inputs, dim=1)
+        pred = torch.clamp(pred, min=1e-7, max=1.0)
+
+        targets_one_hot = one_hot(targets, self.num_classes)
+        targets_one_hot = torch.clamp(targets_one_hot, min=1e-4, max=1.0)
+
+        rce = -1 * torch.sum(pred * torch.log(targets_one_hot), dim=1)
+        nrce = rce / (self.num_classes-1) / 4
+
+        return nrce.mean()
 
 
 class FocalLoss(nn.Module):

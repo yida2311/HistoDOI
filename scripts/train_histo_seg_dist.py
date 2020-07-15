@@ -21,7 +21,7 @@ from dataset.transformer_seg import TransformerSeg, TransformerSegVal
 from dataset.dataset_seg import OralDatasetSeg, collate
 from utils.metrics import AverageMeter
 from utils.lr_scheduler import LR_Scheduler
-from utils.seg_loss import FocalLoss
+from utils.seg_loss import FocalLoss, SymmetricCrossEntropyLoss, NormalizedSymmetricCrossEntropyLoss
 from utils.data import class_to_RGB
 from helper_seg import Trainer, Evaluator, get_optimizer, create_model_load_weights
 from option_seg import Options
@@ -117,8 +117,9 @@ scheduler = LR_Scheduler(args.scheduler, learning_rate, num_epochs, len(dataload
 
 criterion1 = FocalLoss(gamma=3)
 criterion2 = nn.CrossEntropyLoss(reduction='mean')
-# criterion3 = lovasz_softmax
-criterion = lambda x,y: criterion2(x, y)
+criterion3 = SymmetricCrossEntropyLoss(alpha=args.alpha, beta=args.beta, num_classes=n_class)
+criterion4 = NormalizedSymmetricCrossEntropyLoss(alpha=args.alpha, beta=args.beta, num_classes=n_class)
+criterion = lambda x,y: criterion3(x, y)
 
 if not evaluation and local_rank==0:
     writer = SummaryWriter(log_dir=log_path + task_name)
