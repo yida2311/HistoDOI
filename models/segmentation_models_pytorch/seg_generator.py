@@ -3,11 +3,7 @@ from .unet.model import Unet
 
 unet_cfg = {
     'encoder_depth': 5,
-<<<<<<< Updated upstream
-    # 'encoder_weights': None,
-=======
     'encoder_weights': 'imagenet',
->>>>>>> Stashed changes
     'decoder_use_batchnorm': True,
     'decoder_channels': (512, 256, 128, 64, 32),
     'decoder_attention_type': 'scse',

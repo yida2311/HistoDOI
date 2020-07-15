@@ -68,7 +68,7 @@ class Unet(SegmentationModel):
             decoder_channels=decoder_channels,
             n_blocks=encoder_depth,
             use_batchnorm=decoder_use_batchnorm,
-            center=True # attention\conv\Identity
+            center=True, # attention\conv\Identity
             attention_type=decoder_attention_type,
         )
 

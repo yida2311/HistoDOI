@@ -74,7 +74,7 @@ class PAM_Module(nn.Module):
         self.value_conv = nn.Conv2d(in_channels=in_dim, out_channels=in_dim, kernel_size=1)
         self.gamma = nn.Parameter(torch.zeros(1))
         self.softmax = nn.Softmax(dim=-1)
-        self.W = md.Conv2dReLU(in_dim, in_dim, kernel_size=3, padding=1, use_batchnorm=use_batchnorm)
+        self.W = md.Conv2dReLU(in_dim, in_dim, kernel_size=3, padding=1, use_batchnorm=True)
 
     def forward(self, x):
         """
@@ -99,14 +99,14 @@ class PAM_Module(nn.Module):
         return out
 
 
-class CAM_Module(Module):
+class CAM_Module(nn.Module):
     """ Channel attention module"""
     def __init__(self, in_dim):
         super(CAM_Module, self).__init__()
         self.chanel_in = in_dim
-        self.gamma = Parameter(torch.zeros(1))
-        self.softmax  = Softmax(dim=-1)
-        self.W = md.Conv2dReLU(in_dim, in_dim, kernel_size=3, padding=1, use_batchnorm=use_batchnorm)
+        self.gamma = nn.Parameter(torch.zeros(1))
+        self.softmax  = nn.Softmax(dim=-1)
+        self.W = md.Conv2dReLU(in_dim, in_dim, kernel_size=3, padding=1, use_batchnorm=True)
 
     def forward(self,x):
         """
@@ -136,7 +136,7 @@ class DAN_Module(nn.Module):
     """Dual attention module """
     def __init__(self, in_channels, out_channels, use_batchnorm=True):
         super(DAN_Module, self).__init__()
-        inter_channels = in_channels / 4
+        inter_channels = in_channels // 4
 
         self.pconv = md.Conv2dReLU(in_channels, inter_channels, kernel_size=3, padding=1, use_batchnorm=use_batchnorm)
         self.cconv = md.Conv2dReLU(in_channels, inter_channels, kernel_size=3, padding=1, use_batchnorm=use_batchnorm)
