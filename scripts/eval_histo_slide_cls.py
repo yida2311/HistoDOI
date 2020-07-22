@@ -4,12 +4,15 @@ import numpy as np
 import torch 
 import cv2
 from tqdm import tqdm
-
-from models.backbone.ResNet.resnet_model import resnet50
+import sys
+print(sys.path)
+from models.classifier.ResNet.resnet_model import resnext50_32x4d, resnet50, resnet34
+from models.classifier import seresnext50_32x4d, seresnext26_32x4d
 from dataset.transformer_cls import TransformerClsVal
 from dataset.dataset_cls import OralSlideCls, collate
 from utils.metrics import AverageMeter
-from helper_cls import create_model_load_weights, SlideEvaluator
+import helper_cls
+from helper_cls import create_model_load_weights, SlideEvaluator # 
 from option_cls import Options
 from utils.data import class_to_RGB
 
@@ -50,7 +53,8 @@ dataset = OralSlideCls(data_path, meta_path, label=True, transform=transformer)
 
 ###################################
 print("creating models......")
-model = resnet50(pretrained=False, num_classes=n_class)
+# model = resnet50(pretrained=False, num_classes=n_class)
+model = seresnext50_32x4d(pretrained=False, num_classes=n_class)
 model = create_model_load_weights(model, evaluation=True, ckpt_path=ckpt_path)
 
 f_log = open(log_path + task_name + "_test.log", 'w')
