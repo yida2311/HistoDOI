@@ -91,8 +91,8 @@ dataloader_train = DataLoader(dataset_train, num_workers=num_workers, batch_size
 transformer_val = TransformerSegVal
 dataset_val = OralDatasetSeg(img_path_val, mask_path_val, meta_path_val, label=True, transform=transformer_val)
 # dataloader_val = DataLoader(dataset_val, num_workers=num_workers, batch_size=batch_size, collate_fn=collate, shuffle=False, pin_memory=True)
-sampler_val = DistributedSampler(dataset_val, shuffle=False)
-dataloader_val = DataLoader(dataset_val, num_workers=num_workers, batch_size=batch_size, collate_fn=collate, pin_memory=True, sampler=sampler_val)
+# sampler_val = DistributedSampler(dataset_val, shuffle=False)
+dataloader_val = DataLoader(dataset_val, num_workers=num_workers*2, batch_size=batch_size, collate_fn=collate, pin_memory=True)
 
 ###################################
 print("creating models......")
@@ -119,7 +119,7 @@ criterion1 = FocalLoss(gamma=3)
 criterion2 = nn.CrossEntropyLoss(reduction='mean')
 criterion3 = SymmetricCrossEntropyLoss(alpha=args.alpha, beta=args.beta, num_classes=n_class)
 criterion4 = NormalizedSymmetricCrossEntropyLoss(alpha=args.alpha, beta=args.beta, num_classes=n_class)
-criterion = lambda x,y: criterion3(x, y)
+criterion = lambda x,y: criterion4(x, y)
 
 if not evaluation and local_rank==0:
     writer = SummaryWriter(log_dir=log_path + task_name)
@@ -170,7 +170,7 @@ for epoch in range(num_epochs):
     data_time.reset()
     batch_time.reset()
 
-    if epoch % 1 == 0:
+    if epoch % 1 == 0 and local_rank==0:
         with torch.no_grad():
             model.eval()
             print("evaluating...")
@@ -187,8 +187,7 @@ for epoch in range(num_epochs):
                 scores_val = evaluator.get_scores()
                 
                 batch_time.update(time.time()-start_time)
-                if local_rank == 0:
-                    tbar.set_description('mIoU: %.4f; data time: %.2f; batch time: %.2f' % 
+                tbar.set_description('mIoU: %.4f; data time: %.2f; batch time: %.2f' % 
                                     (scores_val["iou_mean"], data_time.avg, batch_time.avg))
 
                 if not test: # has label
@@ -203,7 +202,7 @@ for epoch in range(num_epochs):
                 if not evaluation and not test: # train:val
                     if i_batch * batch_size + len(sample['id']) > (epoch % len(dataloader_val)) and i_batch * batch_size <= (epoch % len(dataloader_val)):
                     # writer.add_image('image', transforms.ToTensor()(images[(epoch % len(dataloader_val)) - i_batch * batch_size]), epoch)
-                        if not test and local_rank==0:
+                        if not test:
                             mask_rgb = class_to_RGB(masks[epoch % len(dataloader_val) - i_batch * batch_size].numpy())
                             mask_rgb = ToTensor()(mask_rgb)
                             predictions_rgb = class_to_RGB(predictions[(epoch % len(dataloader_val)) - i_batch * batch_size])
@@ -220,37 +219,35 @@ for epoch in range(num_epochs):
             evaluator.reset_metrics()
 
             # save model
-            if scores_val['iou_mean'] > best_pred and local_rank==0:
+            if scores_val['iou_mean'] > best_pred:
                 best_pred = scores_val['iou_mean']
                 save_path = os.path.join(model_path, task_name + '-' + str(epoch) + '-' + str(best_pred) + '.pth')
                 torch.save(model.state_dict(), save_path)
             
-            # log   
-            if local_rank == 0:
-                log = ""
-                log = log + 'epoch [{}/{}] mIoU: train = {:.4f}, val = {:.4f}'.format(epoch+1, num_epochs, scores_train['iou_mean'], scores_val['iou_mean']) + "\n"
-                log = log + "[train] IoU = " + str(scores_train['iou']) + "\n"
-                log = log + "[train] Dice = " + str(scores_train['dice']) + "\n"
-                log = log + "[train] Dice_mean = " + str(scores_train['dice_mean']) + "\n"
-                log = log + "[train] Accuracy = " + str(scores_train['accuracy'])  + "\n"
-                log = log + "[train] Accuracy_mean = " + str(scores_train['accuracy_mean'])  + "\n"
-                log = log + "------------------------------------ \n"
-                log = log + "[val] IoU = " + str(scores_val['iou']) + "\n"
-                log = log + "[val] Dice = " + str(scores_val['dice']) + "\n"
-                log = log + "[val] Dice_mean = " + str(scores_val['dice_mean']) + "\n"
-                log = log + "[val] Accuracy = " + str(scores_val['accuracy'])  + "\n"
-                log = log + "[val] Accuracy_mean = " + str(scores_val['accuracy_mean'])  + "\n"
-                log += "================================\n"
-                print(log)
+            log = ""
+            log = log + 'epoch [{}/{}] mIoU: train = {:.4f}, val = {:.4f}'.format(epoch+1, num_epochs, scores_train['iou_mean'], scores_val['iou_mean']) + "\n"
+            log = log + "[train] IoU = " + str(scores_train['iou']) + "\n"
+            log = log + "[train] Dice = " + str(scores_train['dice']) + "\n"
+            log = log + "[train] Dice_mean = " + str(scores_train['dice_mean']) + "\n"
+            log = log + "[train] Accuracy = " + str(scores_train['accuracy'])  + "\n"
+            log = log + "[train] Accuracy_mean = " + str(scores_train['accuracy_mean'])  + "\n"
+            log = log + "------------------------------------ \n"
+            log = log + "[val] IoU = " + str(scores_val['iou']) + "\n"
+            log = log + "[val] Dice = " + str(scores_val['dice']) + "\n"
+            log = log + "[val] Dice_mean = " + str(scores_val['dice_mean']) + "\n"
+            log = log + "[val] Accuracy = " + str(scores_val['accuracy'])  + "\n"
+            log = log + "[val] Accuracy_mean = " + str(scores_val['accuracy_mean'])  + "\n"
+            log += "================================\n"
+            print(log)
+
             if evaluation: break  # one peoch
 
-            if local_rank == 0:
-                f_log.write(log)
-                f_log.flush()
-                writer.add_scalar('lr', optimizer.param_groups[0]['lr'], epoch)
-                writer.add_scalars('mIoU', {'train mIoU': scores_train['iou_mean'], 'validation mIoU': scores_val['iou_mean']}, epoch)
-                writer.add_scalars('mucosa-iou', {'train mucosa-iou': scores_train['iou'][2], 'validation mucosa-iou': scores_val['iou'][2]}, epoch)
-                writer.add_scalars('tumor-iou', {'train tumor-iou': scores_train['iou'][3], 'validation tumor-iou': scores_val['iou'][3]}, epoch)
+            f_log.write(log)
+            f_log.flush()
+            writer.add_scalar('lr', optimizer.param_groups[0]['lr'], epoch)
+            writer.add_scalars('mIoU', {'train mIoU': scores_train['iou_mean'], 'validation mIoU': scores_val['iou_mean']}, epoch)
+            writer.add_scalars('mucosa-iou', {'train mucosa-iou': scores_train['iou'][2], 'validation mucosa-iou': scores_val['iou'][2]}, epoch)
+            writer.add_scalars('tumor-iou', {'train tumor-iou': scores_train['iou'][3], 'validation tumor-iou': scores_val['iou'][3]}, epoch)
 
 if not evaluation and local_rank==0: 
     f_log.close()

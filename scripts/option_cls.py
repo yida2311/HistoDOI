@@ -12,6 +12,7 @@ class Options():
         parser.add_argument('--meta_path_train', type=str, help='path to train meta_file')
         parser.add_argument('--data_path_val', type=str, help='path to val dataset ')
         parser.add_argument('--meta_path_val', type=str, help='path to val meta_file')
+        parser.add_argument('--slide_file', type=str, help='path to slide file')
         parser.add_argument('--model_path', type=str, help='path to store trained model files, no need to include task specific name')
         parser.add_argument('--log_path', type=str, help='path to store tensorboard log files, no need to include task specific name')
         parser.add_argument('--output_path', type=str, help='path to store output files, no need to include task specific name')

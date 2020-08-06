@@ -26,6 +26,7 @@ print(task_name)
 
 data_path = args.data_path_val
 meta_path = args.meta_path_val
+slide_file = args.slide_file
 log_path = args.log_path
 output_path = os.path.join(args.output_path, task_name)
 ckpt_path = args.ckpt_path
@@ -48,7 +49,7 @@ num_workers = args.num_workers
 slide_time = AverageMeter("DataTime", ':3.3f')
 
 transformer = TransformerClsVal
-dataset = OralSlideCls(data_path, meta_path, label=True, transform=transformer)
+dataset = OralSlideCls(data_path, meta_path, slide_file, label=True, transform=transformer)
 # dataloader = torch.utils.data.DataLoader(dataset, batch_size=batch_size, num_workers=num_workers, collate_fn=collate, shuffle=False, pin_memory=True)
 
 ###################################
