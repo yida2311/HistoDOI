@@ -70,6 +70,7 @@ class OralSlideCls(Dataset):
     def __init__(self,
                 data_dir, 
                 meta_file,
+                slide_file,
                 label=True,
                 transform=None):
         super(OralSlideCls, self).__init__()
@@ -79,9 +80,12 @@ class OralSlideCls(Dataset):
 
         self.slides = sorted(os.listdir(self.data_dir))
 
-        with open(meta_file, 'r') as f:
+        with open(slide_file, 'r') as f:
             cnt = json.load(f)
         self.info = cnt  # {"slide": {"size":[h, w], "tiles": [x, y], "step":[step_x, step_y]}}
+
+        df = pd.read_csv(meta_file)
+        self.df = df.set_index('image_id')
 
         self.slide = ""
         self.slide_mask = None
@@ -98,9 +102,11 @@ class OralSlideCls(Dataset):
         slide_mask = np.zeros(tuple(tiles), dtype='uint8')
 
         for c in samples:
-            ver, col, target = self._parse_patch_name(c)
-            # target = 1 if target==1 else 2
-            slide_mask[ver, col] = target
+            info = self.df.loc[c]
+            row = info['row']
+            col = info['col']
+            target = info['target']
+            slide_mask[row, col] = target
         
         return slide_mask
     
@@ -116,7 +122,6 @@ class OralSlideCls(Dataset):
     
     def get_patches_from_name(self, name):
         self.slide = name 
-        
         slide_dir = os.path.join(self.data_dir, self.slide)
         self.samples = os.listdir(slide_dir)
 
@@ -128,20 +133,18 @@ class OralSlideCls(Dataset):
         patch = self.samples[index]
         img_path = os.path.join(os.path.join(self.data_dir, self.slide), patch)
         img = cv2_loader(img_path)
-
+        info = self.df.loc[patch]
         sample = {}
         if self.transform:
             img = self.transform(image=img)['image']
         sample['image'] = img
 
         if self.label:
-            ver, col, target = self._parse_patch_name(patch)
-            sample['coord'] = (ver, col)
-            sample['label'] = target
-            self.slide_mask[ver, col] = target 
+            sample['coord'] = (info['row'], info['col'])
+            sample['label'] = int(info['target'])
+            self.slide_mask[info['row'], info['col']] = int(info['target'])
         else:
-            ver, col = self._parse_patch_name(patch)
-            sample['coord'] = (ver, col)
+            sample['coord'] = (info['row'], info['col'])
 
         return sample
     
@@ -152,9 +155,6 @@ class OralSlideCls(Dataset):
         sp = patch.split('_')
         ver = int(sp[2])
         col = int(sp[3])
-        if self.label:
-            target = int(sp[4])
-            return ver, col, target
         
         return ver, col 
 

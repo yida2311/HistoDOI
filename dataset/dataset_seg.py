@@ -68,7 +68,7 @@ class OralSlideSeg(Dataset):
     def __init__(self,
                 img_dir, 
                 mask_dir,
-                meta_file,
+                slide_file,
                 label=True,
                 transform=None):
         super(OralSlideSeg, self).__init__()
@@ -79,7 +79,7 @@ class OralSlideSeg(Dataset):
         self.transform = transform
 
         self.slides = sorted(os.listdir(self.img_dir))
-        with open(meta_file, 'r') as f:
+        with open(slide_file, 'r') as f:
             cnt = json.load(f)
         self.info = cnt  # {"slide": {"size":[h, w], "tiles": [x, y], "step":[step_x, step_y]}}
 
