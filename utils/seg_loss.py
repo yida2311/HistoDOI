@@ -78,7 +78,7 @@ class KLDivergenceLoss(nn.Module):
 
 class SymmetricCrossEntropyLoss(nn.Module):
     def __init__(self, alpha, beta, num_classes=4, ignore_index=-100):
-        super(self, SymmetricCrossEntropyLoss).__init__()
+        super(SymmetricCrossEntropyLoss, self).__init__()
         self.alpha = alpha
         self.beta = beta
         self.ce_loss = CrossEntropyLoss()
@@ -94,7 +94,7 @@ class SymmetricCrossEntropyLoss(nn.Module):
 
 class NormalizedSymmetricCrossEntropyLoss(nn.Module):
     def __init__(self, alpha, beta, num_classes=4, ignore_index=-100):
-        super(self, NormalizedSymmetricCrossEntropyLoss).__init__()
+        super(NormalizedSymmetricCrossEntropyLoss, self).__init__()
         self.alpha = alpha
         self.beta = beta
         self.nce_loss = NormalizedCrossEntropyLoss(num_classes=num_classes)
