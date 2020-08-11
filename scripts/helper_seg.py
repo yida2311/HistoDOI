@@ -106,7 +106,6 @@ class Trainer(object):
         return loss
     
 
-
 class Evaluator(object):
     def __init__(self, n_class):
         self.metrics = ConfusionMatrixSeg(n_class)
@@ -146,39 +145,55 @@ class Evaluator(object):
         return predictions
 
 
-class SlideEvaluator(object):
-    def __init__(self, n_class):
-        self.metrics = ConfusionMatrixSeg(n_class)
+class SlideInference(object):
+    def __init__(self, n_class, num_workers, batch_size):
+        # self.metrics = ConfusionMatrixSeg(n_class)
         self.n_class = n_class
+        self.num_workers = num_workers
+        self.batch_size = batch_size
+        self.metrics = ConfusionMatrixSeg(n_class)
     
+    def update_scores(self, gt, pred):
+        self.metrics.update(gt, pred)
+
     def get_scores(self):
-        return self.metrics.get_scores()
+        scores = self.metrics.get_scores()
+        return scores
     
     def reset_metrics(self):
         self.metrics.reset()
-    
-    def update_scores(self, mask, output):
-        self.metrics.update(mask, output)
-    
-    def eval(self, sample, model, output, template, step):
-        imgs = sample['image']
-        coord = sample['coord']
-        with torch.no_grad():
-            imgs = imgs.cuda()
-            preds = model.forward(imgs)
-            outputs = preds.cpu().detach().numpy()
-            # predictions = np.argmax(outputs, axis=1)
-            _, _, h, w = outputs.shape
+
+    def inference(self, dataset, model):
+        dataloader = torch.utils.data.DataLoader(dataset, batch_size=self.batch_size, num_workers=self.num_workers, collate_fn=collate, shuffle=False, pin_memory=True)
+        output = np.zeros((self.n_class, dataset.slide_size[0], dataset.slide_size[1])) # n_class x H x W
+        template = np.zeros(dataset.slide_size, dtype='uint8') # H x W
+        step = dataset.slide_step
+
+        for sample in dataloader:
+            imgs = sample['image']
+            coord = sample['coord']
+            with torch.no_grad():
+                imgs = imgs.cuda()
+                preds = model.forward(imgs)
+                preds_np = preds.cpu().detach().numpy()
+            _, _, h, w = preds_np.shape
 
             for i in range(imgs.shape[0]):
                 x = math.floor(coord[i][0] * step[0])
                 y = math.floor(coord[i][1] * step[1])
-                output[:, x:x+h, y:y+w] += outputs[i]
+                output[:, x:x+h, y:y+w] += preds_np[i]
                 template[x:x+h, y:y+w] += np.ones((h, w), dtype='uint8')
+    
+        template[template==0] = 1
+        output = output / template
+        prediction = np.argmax(output, axis=0)
         
-        return output, template
+        return prediction, class_to_RGB(prediction)
 
-
+def struct_time():
+    # 格式化成2020-08-07 16:56:32
+    cur_time = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
+    return cur_time
 
 
 

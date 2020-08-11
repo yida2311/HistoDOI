@@ -14,8 +14,6 @@ from torch.utils.data.distributed import DistributedSampler
 from torchvision.transforms import ToTensor
 import torch.distributed as dist
 
-# from models.segmentor.fpn import fpn_bilinear_resnet50
-# from models.segmentor.unet import UNet
 from models.segmentation_models_pytorch.seg_generator import generate_unet
 from dataset.transformer_seg import TransformerSeg, TransformerSegVal
 from dataset.dataset_seg import OralDatasetSeg, collate
@@ -46,7 +44,6 @@ def seed_everything(seed):
 # seed
 SEED = 233
 seed_everything(SEED)
-
 # arguments
 args = Options().parse()
 n_class = args.n_class
@@ -96,16 +93,12 @@ dataloader_val = DataLoader(dataset_val, num_workers=num_workers*2, batch_size=b
 
 ###################################
 print("creating models......")
-# model = fpn_bilinear_resnet50(num_classes=n_class)
-# model = UNet(n_channels=3, n_classes=n_class)
 model = generate_unet(num_classes=n_class, encoder_name='resnet34')
 model = create_model_load_weights(model, evaluation=False, ckpt_path=args.ckpt_path)
 model = nn.SyncBatchNorm.convert_sync_batchnorm(model)
-print(device)
 model.to(device)
 if torch.cuda.device_count() > 1:
     model = nn.parallel.DistributedDataParallel(model, device_ids=[local_rank], output_device=local_rank, find_unused_parameters=True)
-
 
 ###################################
 num_epochs = args.epochs
@@ -114,7 +107,6 @@ learning_rate = args.lr
 optimizer = get_optimizer(model, learning_rate=learning_rate)
 scheduler = LR_Scheduler(args.scheduler, learning_rate, num_epochs, len(dataloader_train))
 ##################################
-
 criterion1 = FocalLoss(gamma=3)
 criterion2 = nn.CrossEntropyLoss(reduction='mean')
 criterion3 = SymmetricCrossEntropyLoss(alpha=args.alpha, beta=args.beta, num_classes=n_class)
@@ -125,7 +117,6 @@ if not evaluation and local_rank==0:
     writer = SummaryWriter(log_dir=log_path + task_name)
     f_log = open(log_path + task_name + ".log", 'w')
 #######################################
-
 trainer = Trainer(criterion, optimizer, n_class)
 evaluator = Evaluator(n_class)
 
@@ -147,9 +138,8 @@ for epoch in range(num_epochs):
 
     start_time = time.time()
     for i_batch, sample in enumerate(tbar):
-        # print(i_batch)
         data_time.update(time.time()-start_time)
-        # break
+
         if evaluation:  # evaluation pattern: no training
             break
         scheduler(optimizer, i_batch, epoch, best_pred)
@@ -214,14 +204,13 @@ for epoch in range(num_epochs):
 
             data_time.reset()
             batch_time.reset()
-
             scores_val = evaluator.get_scores()
             evaluator.reset_metrics()
 
             # save model
-            if scores_val['iou_mean'] > best_pred:
+            if scores_val['iou_mean'] > best_pred or scores_val['iou_mean'] > 0.81:
                 best_pred = scores_val['iou_mean']
-                save_path = os.path.join(model_path, task_name + '-' + str(epoch) + '-' + str(best_pred) + '.pth')
+                save_path = os.path.join(model_path, "%s-%d-%.5f.pth"%(task_name, epoch, best_pred))
                 torch.save(model.state_dict(), save_path)
             
             log = ""

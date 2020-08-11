@@ -23,105 +23,88 @@ from utils.data import class_to_RGB
 # torch.cuda.set_device(local_rank)
 # device = torch.device('cuda', local_rank)
 
-# arguments
-args = Options().parse()
-n_class = args.n_class
+def main(slide_list):
+    # arguments
+    args = Options().parse()
+    n_class = args.n_class
 
-task_name = args.task_name
-print(task_name)
+    task_name = args.task_name
+    print(task_name)
 
-img_path = args.img_path_val
-mask_path = args.mask_path_val
-meta_path = args.meta_path_val
-log_path = args.log_path
-output_path = os.path.join(args.output_path, task_name)
-ckpt_path = args.ckpt_path
+    img_path = args.img_path_val
+    mask_path = args.mask_path_val
+    meta_path = args.meta_path_val
+    log_path = args.log_path
+    output_path = os.path.join(args.output_path, task_name)
+    ckpt_path = args.ckpt_path
 
-if not os.path.exists(log_path): 
-    os.makedirs(log_path)
-if not os.path.exists(output_path): 
-    os.makedirs(output_path)
+    if not os.path.exists(log_path): 
+        os.makedirs(log_path)
+    if not os.path.exists(output_path): 
+        os.makedirs(output_path)
 
-###################################
-evaluation = args.evaluation
-test = evaluation and True
-print("evaluation:", evaluation, "test:", test)
+    ###################################
+    evaluation = args.evaluation
+    test = evaluation and True
+    print("evaluation:", evaluation, "test:", test)
 
-###################################
-print("preparing datasets and dataloaders......")
-batch_size = args.batch_size
-num_workers = args.num_workers
+    ###################################
+    print("preparing datasets and dataloaders......")
+    batch_size = args.batch_size
+    num_workers = args.num_workers
+    slide_time = AverageMeter("DataTime", ':3.3f')
+    transformer = TransformerSegVal
+    dataset = OralSlideSeg(slide_list, img_path, meta_path, mask_dir=mask_path, label=False, transform=transformer)
 
-slide_time = AverageMeter("DataTime", ':3.3f')
+    ###################################
+    print("creating models......")
+    model = generate_unet(num_classes=n_class, encoder_name='resnet34')
+    # model = create_model_load_weights_v2(model, evaluation=True, ckpt_path=ckpt_path)
+    model = create_model_load_weights(model, evaluation=True, ckpt_path=ckpt_path)
+    model.cuda()
 
-transformer = TransformerSegVal
-dataset = OralSlideSeg(img_path, mask_path, meta_path, label=True, transform=transformer)
-# dataloader = torch.utils.data.DataLoader(dataset, batch_size=batch_size, num_workers=num_workers, collate_fn=collate, shuffle=False, pin_memory=True)
+    f_log = open(log_path + task_name + "_test.log", 'w')
+    #######################################
+    evaluator = SlideInference(n_class, num_workers, batch_size)
+    num_slides = len(dataset.slides)
+    tbar = tqdm(range(num_slides))
 
-###################################
-print("creating models......")
-# model = UNet(n_channels=3, n_classes=n_class)
-model = generate_unet(num_classes=n_class, encoder_name='resnet34')
-# model = create_model_load_weights_v2(model, evaluation=True, ckpt_path=ckpt_path)
-model = create_model_load_weights(model, evaluation=True, ckpt_path=ckpt_path)
-model.cuda()
-
-f_log = open(log_path + task_name + "_test.log", 'w')
-#######################################
-evaluator = SlideEvaluator(n_class)
-
-num_slides = len(dataset.slides)
-tbar = tqdm(range(num_slides))
-for i in tbar:
-    dataset.get_patches_from_index(i)
-    dataloader = torch.utils.data.DataLoader(dataset, batch_size=batch_size, num_workers=num_workers, collate_fn=collate, shuffle=False, pin_memory=True)
-
-    output = np.zeros((n_class, dataset.slide_size[0], dataset.slide_size[1]))
-    template = dataset.slide_template
-    step = dataset.slide_step
+    for i in tbar:
+        start_time = time.time()
+        dataset.get_patches_from_index(i)
+        prediction, output = evaluator.inference(dataset, model)
+        output = cv2.cvtColor(output, cv2.COLOR_BGR2RGB)
+        cv2.imwrite(os.path.join(output_path, dataset.slide+'_ouput.png'), output)
+        slide_time.update(time.time()-start_time)
+        
+        if evaluation:
+            mask = dataset.get_slide_mask_from_index(i)
+            evaluator.update_scores(mask, prediction)
+            scores = evaluator.get_scores()
+            tbar.set_description('Slide: {}'.format(slide) + ', mIOU: %.5f; slide time: %.2f' % (scores['iou_mean'], slide_time.avg))
+        else:
+            tbar.set_description('Slide: {}'.format(slide) + ', slide time: %.2f' % (slide_time.avg))
     
-    start_time = time.time()
-    for sample in dataloader:
-        # print(dataset.slide_mask)
-        output, template = evaluator.eval(sample, model, output, template, step)
+    if evaluation:
+        scores = evaluator.get_scores()
+        print(evaluator.metrics.confusion_matrix)
+    log = ""
+    log = log + str(task_name) + '   slide inference \n'
+    if evaluation:
+        log = log + "mIOU = " + str(scores['iou_mean']) + '\n'
+        log = log + "IOU: " + str(scores['iou']) + '\n'
+        log = log + "Dice: " + str(scores['dice']) + '\n'
     
-    template[template==0] = 1
-    output = output / template
-    prediction = np.argmax(output, axis=0)
+    log = log + "[Time consuming %.2fs][%.2fs per slide]" % (slide_time.sum, slide_time.avg) + '\n'
+    log += "================================\n"
+    print(log)
 
-    slide_time.update(time.time()-start_time)
-    start_time = time.time()
+    f_log.write(log)
+    f_log.close()
 
-    slide = dataset.slide
-    # mask = dataset.slide_mask
-    mask = dataset.get_slide_mask_from_index(i)
-    evaluator.update_scores(mask, prediction)
-    scores = evaluator.get_scores()
 
-    # save result
-    print(prediction.shape)
-    output_rgb = class_to_RGB(prediction)
-    mask_rgb = class_to_RGB(mask)
-    output_rgb = cv2.cvtColor(output_rgb, cv2.COLOR_BGR2RGB)
-    mask_rgb = cv2.cvtColor(mask_rgb, cv2.COLOR_BGR2RGB)
-    cv2.imwrite(os.path.join(output_path, slide+'_output.png'), output_rgb)
-    cv2.imwrite(os.path.join(output_path, slide+'_mask.png'), mask_rgb)
-
-    tbar.set_description('Slide: {}'.format(slide) + ', mIOU: %.5f; slide time: %.2f' % (scores['iou_mean'], slide_time.avg))
-
-scores = evaluator.get_scores()
-print(evaluator.metrics.confusion_matrix)
-log = ""
-log = log + str(task_name) + '   slide inference \n'
-log = log + "mIOU = " + str(scores['iou_mean']) + '\n'
-log = log + "IOU: " + str(scores['iou']) + '\n'
-log = log + "Dice: " + str(scores['dice']) + '\n'
-log += "================================\n"
-print(log)
-
-f_log.write(log)
-f_log.close()
-
+slide_list = []
+main(slide_list)
 
 
 
