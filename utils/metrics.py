@@ -61,10 +61,7 @@ class ConfusionMatrixCls(object):
         self.confusion_matrix = np.zeros((self.n_classes, self.n_classes))
       
 
-
-
 class ConfusionMatrixSeg(object):
-
     def __init__(self, n_classes):
         self.n_classes = n_classes
         self.confusion_matrix = np.zeros((n_classes, n_classes))
@@ -83,8 +80,11 @@ class ConfusionMatrixSeg(object):
         """Returns accuracy score evaluation result.
             - overall accuracy
             - mean accuracy
-            - mean IU
-            - fwavacc
+            - IoU
+            - mean IoU
+            - dice
+            - mean dice
+            - IoU based on frequency
         """
         hist = self.confusion_matrix
         # accuracy is recall/sensitivity for each class, predicted TP / all real positives
@@ -96,7 +96,6 @@ class ConfusionMatrixSeg(object):
         union = hist.sum(axis=1) + hist.sum(axis=0) - np.diag(hist)
         iou = intersect / union
         mean_iou = np.mean(np.nan_to_num(iou[1:]))
-        tm_iou = np.mean(np.nan_to_num(iou[2:]))
         
         dice = 2 * intersect / (hist.sum(axis=1) + hist.sum(axis=0))
         mean_dice = np.mean(np.nan_to_num(dice[1:]))
@@ -107,20 +106,15 @@ class ConfusionMatrixSeg(object):
 
         return {'accuracy': acc,
                 'accuracy_mean': acc_mean,
-                'freqw_iou': freq_iou,
                 'iou': iou, 
                 'iou_mean': mean_iou, 
-                "iou_tm": tm_iou,
                 'dice': dice,
                 'dice_mean': mean_dice,
-                # 'IoU_threshold': np.mean(np.nan_to_num(self.iou_threshold)),
+                'freqw_iou': freq_iou,
                 }
 
     def reset(self):
         self.confusion_matrix = np.zeros((self.n_classes, self.n_classes))
-        # self.iou = []
-        # self.iou_threshold = []
-
 
 
 class AverageMeter(object):
