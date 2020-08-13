@@ -12,8 +12,6 @@ from torch.utils.tensorboard import SummaryWriter
 from torch.utils.data import DataLoader
 from torchvision.transforms import ToTensor
 
-# from models.segmentor.fpn import fpn_bilinear_resnet50
-# from models.segmentor.unet import UNet
 from models.segmentation_models_pytorch.seg_generator import generate_unet
 from dataset.transformer_seg import TransformerSeg, TransformerSegVal
 from dataset.dataset_seg import OralDatasetSeg, collate
@@ -87,11 +85,10 @@ dataloader_val = DataLoader(dataset_val, num_workers=num_workers, batch_size=bat
 
 ###################################
 print("creating models......")
-# model = fpn_bilinear_resnet50(num_classes=n_class)
-# model = UNet(n_channels=3, n_classes=n_class)
 model = generate_unet(num_classes=n_class, encoder_name='resnet34')
-model = create_model_load_weights(model, evaluation=False, ckpt_path=args.ckpt_path)
-
+model = create_model_load_weights(model, evaluation=True, ckpt_path=args.ckpt_path)
+device = torch.device('cuda:0')
+model.to(device)
 ###################################
 num_epochs = args.epochs
 learning_rate = args.lr
@@ -99,18 +96,16 @@ learning_rate = args.lr
 optimizer = get_optimizer(model, learning_rate=learning_rate)
 scheduler = LR_Scheduler('poly', learning_rate, num_epochs, len(dataloader_train))
 ##################################
-
 criterion1 = FocalLoss(gamma=3)
 criterion2 = nn.CrossEntropyLoss(reduction='mean')
 criterion3 = SymmetricCrossEntropyLoss(alpha=args.alpha, beta=args.beta, num_classes=n_class)
 criterion4 = NormalizedSymmetricCrossEntropyLoss(alpha=args.alpha, beta=args.beta, num_classes=n_class)
-criterion = lambda x,y: criterion3(x, y)
+criterion = lambda x,y: criterion2(x, y)
 
 if not evaluation:
     writer = SummaryWriter(log_dir=log_path + task_name)
     f_log = open(log_path + task_name + ".log", 'w')
 #######################################
-
 trainer = Trainer(criterion, optimizer, n_class)
 evaluator = Evaluator(n_class)
 
@@ -127,18 +122,20 @@ f_log.flush()
 
 for epoch in range(num_epochs):
     optimizer.zero_grad()
+    num_batch = len(dataloader_train)
     tbar = tqdm(dataloader_train)
     train_loss = 0
 
     start_time = time.time()
+    model.train()
     for i_batch, sample in enumerate(tbar):
-        # print(i_batch)
         data_time.update(time.time()-start_time)
         # break
         if evaluation:  # evaluation pattern: no training
             break
         scheduler(optimizer, i_batch, epoch, best_pred)
-        loss = trainer.train(sample, model)
+        # loss = trainer.train(sample, model)
+        loss = trainer.train_acc(sample, model, i_batch, 4, num_batch)
         train_loss += loss.item()
         scores_train = trainer.get_scores()
 
@@ -198,15 +195,13 @@ for epoch in range(num_epochs):
 
             data_time.reset()
             batch_time.reset()
-
             scores_val = evaluator.get_scores()
             evaluator.reset_metrics()
 
             # save model
-            if scores_val['iou_mean'] > best_pred:
+            if scores_val['iou_mean'] > best_pred or scores_val['iou_mean']>0.81:
                 best_pred = scores_val['iou_mean']
-        
-                save_path = os.path.join(save_dir, task_name + '-' + str(epoch) + '-' + str(best_pred) + '.pth')
+                save_path = os.path.join(model_path, "%s-%d-%.5f.pth"%(task_name, epoch, best_pred))
                 torch.save(model.state_dict(), save_path)
             # log   
             log = ""
@@ -214,12 +209,14 @@ for epoch in range(num_epochs):
             log = log + "[train] IoU = " + str(scores_train['iou']) + "\n"
             log = log + "[train] Dice = " + str(scores_train['dice']) + "\n"
             log = log + "[train] Dice_mean = " + str(scores_train['dice_mean']) + "\n"
-            log = log + "[train] accuracy = " + str(scores_train['accuracy'])  + "\n"
+            log = log + "[train] Accuracy = " + str(scores_train['accuracy'])  + "\n"
+            log = log + "[train] Accuracy_mean = " + str(scores_train['accuracy_mean'])  + "\n"
             log = log + "------------------------------------ \n"
             log = log + "[val] IoU = " + str(scores_val['iou']) + "\n"
             log = log + "[val] Dice = " + str(scores_val['dice']) + "\n"
             log = log + "[val] Dice_mean = " + str(scores_val['dice_mean']) + "\n"
-            log = log + "[val] accuracy = " + str(scores_val['accuracy'])  + "\n"
+            log = log + "[val] Accuracy = " + str(scores_val['accuracy'])  + "\n"
+            log = log + "[val] Accuracy_mean = " + str(scores_val['accuracy_mean'])  + "\n"
             log += "================================\n"
             print(log)
             if evaluation: break  # one peoch

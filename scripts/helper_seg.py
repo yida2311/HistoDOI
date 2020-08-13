@@ -77,6 +77,28 @@ class Trainer(object):
         
         return loss
     
+    def train_acc(self, sample, model, i, acc_step, maxLen):
+        imgs = sample['image']
+        masks = sample['mask'].squeeze(1)
+
+        imgs = imgs.cuda()
+        masks_npy = np.array(masks)
+        masks = masks.cuda()
+
+        preds = model.forward(imgs)
+        loss = self.criterion(preds, masks) / acc_step
+        loss.backward()
+
+        if i%acc_step == 0 or i==maxLen-1:
+            self.optimizer.step()
+            self.optimizer.zero_grad()
+
+        outputs = preds.cpu().detach().numpy()
+        predictions = np.argmax(outputs, axis=1)
+        self.metrics.update(masks_npy, predictions)
+        
+        return loss
+    
     def train_schp(self, sample, model, schp_model, cycle_n):
         model.train()
         imgs = sample['image']
