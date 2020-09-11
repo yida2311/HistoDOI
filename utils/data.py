@@ -38,6 +38,7 @@ def class_to_RGB(label):
     indices = np.where(label == 3)
     colmap[indices[0].tolist(), indices[1].tolist(), :] = [0, 0, 255]
     indices = np.where(label == 0)
+    print(indices)
     colmap[indices[0].tolist(), indices[1].tolist(), :] = [0, 0, 0]
 
     return colmap

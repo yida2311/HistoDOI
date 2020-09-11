@@ -4,15 +4,14 @@ import cv2
 import math
 import numpy as np
 import torch
-import torch.nn as nn
 import torch.nn.functional as F
-from torch.autograd import Variable
-from torchvision import transforms
 from PIL import Image
 
-from models.segmentor.fpn import fpn_bilinear_resnet50
 from models.utils import Parallel2Single
 from utils.metrics import ConfusionMatrixSeg, AverageMeter
+from dataset.dataset_seg import collate
+from utils.data import class_to_RGB
+
 
 def create_model_load_weights(model, evaluation=False, ckpt_path=None):
     if evaluation and ckpt_path:
@@ -185,7 +184,7 @@ class SlideInference(object):
     def reset_metrics(self):
         self.metrics.reset()
 
-    def inference(self, dataset, model):
+    def inference(self, dataset, model, scale=4):
         dataloader = torch.utils.data.DataLoader(dataset, batch_size=self.batch_size, num_workers=self.num_workers, collate_fn=collate, shuffle=False, pin_memory=True)
         output = np.zeros((self.n_class, dataset.slide_size[0], dataset.slide_size[1])) # n_class x H x W
         template = np.zeros(dataset.slide_size, dtype='uint8') # H x W
@@ -210,7 +209,7 @@ class SlideInference(object):
         output = output / template
         prediction = np.argmax(output, axis=0)
         
-        return prediction, class_to_RGB(prediction)
+        return prediction, class_to_RGB(prediction), np.resize(output, (self.n_class, dataset.slide_size[0]//4, dataset.slide_size[1]//4))
 
 def struct_time():
     # 格式化成2020-08-07 16:56:32

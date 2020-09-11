@@ -203,7 +203,6 @@ class UnetDecoder(nn.Module):
 
         features = features[1:]    # remove first skip with same spatial resolution
         features = features[::-1]  # reverse channels to start from head of encoder
-
         head = features[0]
         skips = features[1:]
 

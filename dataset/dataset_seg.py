@@ -77,7 +77,7 @@ class OralSlideSeg(Dataset):
             slide_list: list of slides name
             img_dir: image directory
             slide_file: json file, slide meta file, which include size, tiles, step
-            mask_dir: mask directory
+            slide_mask_dir: mask directory
             label: if True, used for train/val; if False, used for test
             transform: image preprocess
         """
@@ -86,7 +86,7 @@ class OralSlideSeg(Dataset):
         self.img_dir = img_dir
         self.label = label 
         if self.label:
-            self.slide_mask_dir = mask_dir
+            self.slide_mask_dir = slide_mask_dir
         self.transform = transform
 
         with open(slide_file, 'r') as f:
@@ -103,7 +103,8 @@ class OralSlideSeg(Dataset):
             ---no use for test 
         """
         slide = self.slides[index]
-        slide_mask_dir = os.path.join(self.slide_mask_dir, slide)
+        slide_mask_dir = os.path.join(self.slide_mask_dir, slide+'.png')
+        print(slide_mask_dir)
         slide_mask = cv2_mask_loader(slide_mask_dir)
         
         return slide_mask
@@ -127,7 +128,7 @@ class OralSlideSeg(Dataset):
 
         if self.transform:
             if self.label:
-                mask_path = os.path.join(os.path.join(self.mask_dir, self.slide), patch)
+                mask_path = os.path.join(os.path.join(self.slide_mask_dir, self.slide), patch)
                 mask = cv2_mask_loader(mask_path)
                 sample = self.transform(image=img, mask=mask)
             else:

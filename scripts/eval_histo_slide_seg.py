@@ -10,7 +10,7 @@ from models.segmentation_models_pytorch.seg_generator import generate_unet
 from dataset.transformer_seg import TransformerSegVal
 from dataset.dataset_seg import OralSlideSeg, collate
 from utils.metrics import AverageMeter
-from helper_seg import create_model_load_weights, SlideEvaluator
+from helper_seg import create_model_load_weights, SlideInference
 from option_seg import Options 
 from utils.data import class_to_RGB
 
@@ -23,16 +23,20 @@ task_name = args.task_name
 print(task_name)
 
 img_path = args.img_path_val
-mask_path = args.mask_path_val
+# mask_path = args.mask_path_val
 meta_path = args.meta_path_val
+slide_mask_path = args.slide_mask_path
 log_path = args.log_path
 output_path = os.path.join(args.output_path, task_name)
+npy_path = os.path.join(args.npy_path, task_name)
 ckpt_path = args.ckpt_path
 
 if not os.path.exists(log_path): 
     os.makedirs(log_path)
 if not os.path.exists(output_path): 
     os.makedirs(output_path)
+if not os.path.exists(npy_path): 
+    os.makedirs(npy_path)
 
 ###################################
 evaluation = args.evaluation
@@ -47,7 +51,9 @@ num_workers = args.num_workers
 slide_time = AverageMeter("DataTime", ':3.3f')
 
 transformer = TransformerSegVal
-dataset = OralSlideSeg(img_path, mask_path, meta_path, label=True, transform=transformer)
+slide_list = os.listdir(img_path)
+# slide_list = [slide_list[45]]
+dataset = OralSlideSeg(slide_list, img_path, meta_path, slide_mask_dir=slide_mask_path, label=True, transform=transformer)
 # dataloader = torch.utils.data.DataLoader(dataset, batch_size=batch_size, num_workers=num_workers, collate_fn=collate, shuffle=False, pin_memory=True)
 
 ###################################
@@ -59,27 +65,15 @@ model.cuda()
 
 f_log = open(log_path + task_name + "_test.log", 'w')
 #######################################
-evaluator = SlideEvaluator(n_class)
+evaluator = SlideInference(n_class, num_workers, batch_size)
 
 num_slides = len(dataset.slides)
 tbar = tqdm(range(num_slides))
 for i in tbar:
     dataset.get_patches_from_index(i)
-    dataloader = torch.utils.data.DataLoader(dataset, batch_size=batch_size, num_workers=num_workers, collate_fn=collate, shuffle=False, pin_memory=True)
-
-    output = np.zeros((n_class, dataset.slide_size[0], dataset.slide_size[1]))
-    template = dataset.slide_template
-    step = dataset.slide_step
     
     start_time = time.time()
-    for sample in dataloader:
-        # print(dataset.slide_mask)
-        output, template = evaluator.eval(sample, model, output, template, step)
-    
-    template[template==0] = 1
-    output = output / template
-    prediction = np.argmax(output, axis=0)
-
+    prediction, output_rgb, output = evaluator.inference(dataset, model)
     slide_time.update(time.time()-start_time)
     start_time = time.time()
 
@@ -90,14 +84,13 @@ for i in tbar:
     scores = evaluator.get_scores()
 
     # save result
-    print(prediction.shape)
-    output_rgb = class_to_RGB(prediction)
-    mask_rgb = class_to_RGB(mask)
+    print(output.shape)
+    # mask_rgb = class_to_RGB(mask)
     output_rgb = cv2.cvtColor(output_rgb, cv2.COLOR_BGR2RGB)
-    mask_rgb = cv2.cvtColor(mask_rgb, cv2.COLOR_BGR2RGB)
+    # mask_rgb = cv2.cvtColor(mask_rgb, cv2.COLOR_BGR2RGB)
     cv2.imwrite(os.path.join(output_path, slide+'_output.png'), output_rgb)
-    cv2.imwrite(os.path.join(output_path, slide+'_mask.png'), mask_rgb)
-
+    # cv2.imwrite(os.path.join(output_path, slide+'_mask.png'), mask_rgb)
+    np.save(os.path.join(npy_path, slide+'.npy'), output)
     tbar.set_description('Slide: {}'.format(slide) + ', mIOU: %.5f; slide time: %.2f' % (scores['iou_mean'], slide_time.avg))
 
 scores = evaluator.get_scores()

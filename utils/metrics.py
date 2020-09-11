@@ -2,7 +2,7 @@
 # https://github.com/wkentaro/pytorch-fcn/blob/master/torchfcn/utils.py
 
 import numpy as np
-
+from collections import Iterable
 
 class ConfusionMatrixCls(object):
     def __init__(self, n_classes):
@@ -72,9 +72,12 @@ class ConfusionMatrixSeg(object):
         return hist
 
     def update(self, label_trues, label_preds):
-        for lt, lp in zip(label_trues, label_preds):
-            tmp = self._fast_hist(lt.flatten(), lp.flatten(), self.n_classes)
-            self.confusion_matrix += tmp
+        if not isinstance(label_preds, list):
+            self.confusion_matrix += self._fast_hist(label_trues.flatten(), label_preds.flatten(), self.n_classes)
+        else:
+            for lt, lp in zip(label_trues, label_preds):
+                tmp = self._fast_hist(lt.flatten(), lp.flatten(), self.n_classes)
+                self.confusion_matrix += tmp
 
     def get_scores(self):
         """Returns accuracy score evaluation result.
