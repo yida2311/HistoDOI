@@ -4,16 +4,17 @@ import torch.nn.functional as F
 import numpy as np 
 import random
 import math 
+import cv2
 
 
-def slide2component(slide, size, min_size, num_nodes):
+def slide2component(slide, size, min_area, num_nodes):
     """Transform slide to connected components to construct graph
-        slide: torch.tensor, CxHxW
+        slide: numpy array, CxHxW
     """
-    mask = np.array(torch.argmax(slide, dim=0)) 
-    _, thresh0 = cv2.threshold(img, 0, 255, cv2.THRESH_BINARY)
-    _, thresh1 = cv2.threshold(img, 1, 255, cv2.THRESH_BINARY)
-    _, thresh2 = cv2.threshold(img, 2, 255, cv2.THRESH_BINARY)
+    mask = np.array(np.argmax(slide, axis=0), dtype='uint8')
+    _, thresh0 = cv2.threshold(mask, 0, 255, cv2.THRESH_BINARY)
+    _, thresh1 = cv2.threshold(mask, 1, 255, cv2.THRESH_BINARY)
+    _, thresh2 = cv2.threshold(mask, 2, 255, cv2.THRESH_BINARY)
     normal = thresh0 - thresh1
     mucosa = thresh1 - thresh2
     tumor = thresh2
@@ -21,37 +22,56 @@ def slide2component(slide, size, min_size, num_nodes):
     n1, label1, stats1, centroids1 = cv2.connectedComponentsWithStats(normal)
     n2, label2, stats2, centroids2 = cv2.connectedComponentsWithStats(mucosa)
     n3, label3, stats3, centroids3 = cv2.connectedComponentsWithStats(tumor)
-
+    print(n1, n2, n3)
     res = []
-    res1, num1 = parseComponent(slide, n1, label1, stats1, centroids1, size=size, min_size=min_size, maxNum=num_nodes[0])
-    res2, num2 = parseComponent(slide, n2, label2, stats2, centroids2, size=size, min_size=min_size, maxNum=num_nodes[1])
-    res3, num3 = parseComponent(slide, n2, label2, stats3, centroids3, size=size, min_size=min_size, maxNum=num_nodes[2])
+    res1, num1 = parseComponent(slide, n1, label1, stats1, centroids1, size=size, min_area=min_area, maxNum=num_nodes[0])
+    res2, num2 = parseComponent(slide, n2, label2, stats2, centroids2, size=size, min_area=min_area, maxNum=num_nodes[1])
+    res3, num3 = parseComponent(slide, n3, label3, stats3, centroids3, size=size, min_area=min_area, maxNum=num_nodes[2])
     res = res1 + res2 + res3
 
-    cmp = torch.stack(res[:][0], dim=0) # Nx4xsizexsize
-    spa = torch.stack(res[:][1], dim=0) # Nx4
-    info = res[:][2]
+    print(num1, num2, num3)
+    cmp = torch.cat([c[0] for c in res], dim=0) # Nx4xsizexsize
+    spa = torch.stack([c[1] for c in res], dim=0) # Nx4
+    info = [c[2] for c in res]
     cnt = (num1, num2, num3)
     return cmp, spa, info, cnt
 
 
-def parseComponent(slide, n, label, stats, centroids, size=16, min_size=32 maxNum=30):
-    """parse and filter connected components"""
+def parseComponent(slide, n, label, stats, centroids, size=16, min_area=64, maxNum=30):
+    """parse and filter connected components
+    Args:
+        slide (numpy array): slide feature
+        n (int): number of connected components
+        label (numpy array): marked connected components mask
+        stats (numpy array): n x 5, connected components' status including x, y, h, w, area
+        centroids (numpy array): n x 2, connected components' centroids
+        size (int): resize connected components to size
+        min_area (int): threshold of connected component selection
+        maxNum: maximum number of selected connected components
+    Output:
+        res (list): connected components feature, spatial feature, information
+    """
+    slide = torch.from_numpy(slide).float()
+    label = torch.from_numpy(label)
     res = []
+    area_hist = []
     for i in range(1, n):
-        if stats[i][2] < min_size and stas[i][3] < min_size:
-            continue
-        else:
-            patch = slide[:, stats[i][1]:stats[i][1]+stats[i][3], stats[i][0]:stats[i][0]+stats[i][2]]
-            mask = label[stats[i][1]:stats[i][1]+stats[i][3], stats[i][0]:stats[i][0]+stats[i][2]]
-            cmp = F.interpolate(patch[mask==i], size=(size, size), mode='nearest')
-            spa = torch.FloatTensor([centroids[i][1], centroids[i][0], stats[i][3], stats[i][2]]) # row, col, h, w
-            info = {"bbox":stats[i][:4], "area":stats[i][4], "centroid":centroids[i]}
-            res.append([cmp, spa, info]) # component, spatial, info
+        if stats[i][2] > 1 and stats[i][3] > 1:
+            area_hist.append((stats[i][4], i))
     
-    res.sort(key=lambda x: x[2]['area'], reverse=True)
-    if len(res) > maxNum:
-        return res[:maxNum], maxNum
+    area_hist.sort(key=lambda x: x[0], reverse=True)
+    if len(area_hist) > maxNum:
+        area_hist = area_hist[:maxNum]
+
+    for area, i in area_hist:
+        patch = slide[:, stats[i][1]:stats[i][1]+stats[i][3], stats[i][0]:stats[i][0]+stats[i][2]]
+        mask = label[stats[i][1]:stats[i][1]+stats[i][3], stats[i][0]:stats[i][0]+stats[i][2]]
+        feat = patch*(mask==i)
+        cmp = torch.FloatTensor(F.interpolate(feat.unsqueeze(0), size=(size, size), mode='bilinear'))
+        spa = torch.FloatTensor([centroids[i][1], centroids[i][0], stats[i][3], stats[i][2]]) # row, col, h, w
+        info = {"bbox":stats[i][:4], "area":stats[i][4], "centroid":centroids[i]}
+        res.append([cmp, spa, info]) # component, spatial, info
+    
     return res, len(res)
 
 
@@ -65,8 +85,7 @@ def edgeGeneration(spa, cnt, num_edges_per_class):
     k1 = min(k, num_normal)
     k2 = min(k, num_mucosa)
     k3 = min(k, num_tumor)
-    large = list(range(k1)) + list(range(num_normal:num_normal+k2)) + 
-            list(range(num_normal+num_mucosa, num_normal+num_mucosa+k3))
+    large = list(range(k1)) + list(range(num_normal, num_normal+k2)) + list(range(num_normal+num_mucosa, num_normal+num_mucosa+k3))
     small = [c for c in range(num_nodes) if c not in large]
 
     edges_index = []
@@ -85,10 +104,9 @@ def edgeGeneration(spa, cnt, num_edges_per_class):
             edges_index.append([large[j], large[i]])
             edges.append(relation_encoding(spa, large[i], large[j]))
             edges.append(relation_encoding(spa, large[j], large[i]))
-        
-    edges = torch.tensor(edges, dtype=torch.float)
-    edges_index = torch.tensor(edges_index, dtype=torch.float)
-    edges_label = torch.tensor(edges_label, dtype=torch.float)
+    
+    edges = torch.stack(edges, dim=0)
+    edges_index = torch.tensor(edges_index, dtype=torch.long)
 
     return edges, edges_index
 
@@ -117,9 +135,9 @@ def relation_encoding(spa, i, j):
     s_j = spa[j]
     edge = torch.zeros(4)
     edge[0] = s_j[0] - s_i[0]  # xj - xi 
-    edge[0] = ln(edge[0]) if edge[0] > 0 else -ln(-edge[0])
+    edge[0] = np.log(edge[0]+1) if edge[0] > 0 else -np.log(-edge[0]+1)
     edge[1] = s_j[1] - s_i[1]  # yj - yi
-    edge[1] = ln(edge[1]) if edge[1] > 0 else -ln(-edge[1])
+    edge[1] = np.log(edge[1]+1) if edge[1] > 0 else -np.log(-edge[1]+1)
     edge[2] = torch.log(s_j[2]/s_i[2]) #　ln(hj/hi)
     edge[3] = torch.log(s_j[3]/s_i[3]) #　ln(wj/wi)
 
@@ -136,11 +154,11 @@ def labelGeneration(mask, info, edges_index, num_nodes, num_edges):
         label = getLabelFromMask(patch_mask)
         cluster_label[i] = label
         if label == 1 or label == 3:
-            nodes_label = 1
+            nodes_label[i] = 1
         else:
-            nodes_label = label
+            nodes_label[i] = label
         
-    edges_label = torch.zeros(num_edges, dtype=torch.long) # label of edges
+    edges_label = torch.zeros(num_edges, dtype=torch.float) # label of edges
     for j in range(num_edges):
         edge_index = edges_index[j]
         if cluster_label[edge_index[0]] == cluster_label[edge_index[1]]:
@@ -151,8 +169,8 @@ def labelGeneration(mask, info, edges_index, num_nodes, num_edges):
 
 def getLabelFromMask(mask):
     hist = [0]*4
-    for j in range(4):
-        hist[j] = np.sum(mask==i+1)
+    for i in range(4):
+        hist[i] = np.sum(mask==i+1)
         
     return hist.index(max(hist))
 

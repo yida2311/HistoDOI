@@ -12,6 +12,7 @@ from torch_geometric.nn.inits import glorot, zeros
 
 class Stem(nn.Module):
     def __init__(self, in_channels, out_channels):
+        super(Stem, self).__init__()
         self.conv1 = nn.Conv2d(in_channels=in_channels, out_channels=out_channels, kernel_size=3, stride=2, padding=1)
         self.norm = nn.GroupNorm(num_groups=4, num_channels=out_channels)
         self.pool = nn.AdaptiveAvgPool2d((1,1))
@@ -48,18 +49,14 @@ class EdgeGATConv(GATConv):
         super(EdgeGATConv, self).__init__(in_channels, out_channels, heads, concat, negative_slope, dropout, add_self_loops, bias, **kwargs)
         self.edge_in_channels = edge_in_channels
         self.edge_out_channels = edge_out_channels
-        self.lin_edge1 == Linear(edge_in_channels, out_channels)
-        self.lin_edge2 = nn.ModuleList([Linear(3*out_channels, edge_out_channels, bias=True), nn.ReLU()])
+        self.lin_edge1 = Linear(edge_in_channels, out_channels*heads)
+        self.lin_edge2 = Linear(3*out_channels, edge_out_channels, bias=True)
+        self.reset_parameters_extra()
     
-    def reset_parameters(self):
-        glorot(self.lin_l.weight)
-        glorot(self.lin_r.weight)
-        glorot(self.att_l)
-        glorot(self.att_r)
+    def reset_parameters_extra(self):
         glorot(self.lin_edge1.weight)
         glorot(self.lin_edge2.weight)
-        glorot(self.lin_edge2.bias)
-        glorot(self.bias)
+        zeros(self.lin_edge2.bias)
 
 
     def forward(self, data, size=None, return_attention_weights=None):
@@ -70,7 +67,7 @@ class EdgeGATConv(GATConv):
         """
         x, edge_index, edge_attr = data.x, data.edge_index, data.edge_attr
         batch = data.batch
-        H, C = self.head, self.out_channels
+        H, C = self.heads, self.out_channels
 
         x_l: OptTensor = None
         x_r: OptTensor = None
@@ -79,12 +76,12 @@ class EdgeGATConv(GATConv):
 
         # node linear transform
         if isinstance(x, Tensor):
-            assert x.dim == 2, "Static graphs not supported in 'EdgeGATConv'."
+            # assert x.dim == 2, "Static graphs not supported in 'EdgeGATConv'."
             x_l = x_r = self.lin_l(x).view(-1, H, C)
             alpha_l = alpha_r = (x_l * self.att_l).sum(dim=-1)
         else:
             x_l, x_r = x[0], x[1]
-            assert x[0].dim == 2, "Static graphs not supported in 'EdgeGATConv'."
+            # assert x[0].dim == 2, "Static graphs not supported in 'EdgeGATConv'."
             x_l = self.lin_l(x_l).view(-1, H, C)
             alpha_l = (x_l * self.att_l).sum(dim=-1)
             if x_r is not None:
@@ -93,16 +90,15 @@ class EdgeGATConv(GATConv):
         
         assert x_l is not None
         assert alpha_l is not None
-
         # edge propagate
-        edge_attr = self.lin_edge1(edge_attr)
+        edge_attr = self.lin_edge1(edge_attr).view(-1, H, C)
         edge_attr = self.edge_propagate(edge_index, edge_attr, x_l, size=size)
 
         # add self loops
         if self.add_self_loops:
             if isinstance(edge_index, Tensor):
                 num_nodes = x_l.size(0)
-                num_nodes = size[1] is size is not None else num_nodes
+                num_nodes = size[1] if size is not None else num_nodes
                 num_nodes  = x_r.size(0) if x_r is not None else num_nodes
                 edge_index, _ = remove_self_loops(edge_index)
                 edge_index, _ = add_self_loops(edge_index, num_nodes=num_nodes)
@@ -118,7 +114,7 @@ class EdgeGATConv(GATConv):
         if self.concat:
             out = out.view(-1, self.heads*self.out_channels)
         else:
-            out = out.mean(dim=-1)
+            out = out.mean(dim=1)
         
         if self.bias is not None:
             out += self.bias
@@ -126,11 +122,11 @@ class EdgeGATConv(GATConv):
         if isinstance(return_attention_weights, bool):
             assert alpha is not None
             if isinstance(edge_index, Tensor):
-                return out, edge, (edge_index, alpha)
+                return out, edge_attr, (edge_index, alpha)
             elif isinstance(edge_index, SparseTensor):
-                return out, edge, edge_index.set_value(alpha, layout='coo')
+                return out, edge_attr, edge_index.set_value(alpha, layout='coo')
         else:
-            return out, edge
+            return out, edge_attr
     
 
     def edge_propagate(self, edge_index: Adj, edge_attr: Tensor, x: Tensor, size: Size=None):
@@ -140,9 +136,8 @@ class EdgeGATConv(GATConv):
         x_i = self.__lift__(x, edge_index, i)
         x_j = self.__lift__(x, edge_index, j)
 
-        out = self.lin_edge2(torch.cat([x_i, edge_attr, x_j]))
+        out = torch.mean(self.lin_edge2(torch.cat([x_i, edge_attr, x_j], dim=2)), dim=1)
         out = F.relu(out)
-
         return out
 
     
@@ -161,7 +156,7 @@ class EdgeGATConv(GATConv):
                                             self.in_channels,
                                             self.out_channels,
                                             self.edge_in_channels,
-                                            self.edge_out_channels
+                                            self.edge_out_channels,
                                             self.heads)
 
 
@@ -177,12 +172,12 @@ class DoiNet(nn.Module):
     
     
     def forward(self, data):
-        x, edge_index, edge_attr = data.x, data.edge_index, data.edge_attr
-        x = self.stem()
-        x, edge_attr = self.gat_conv_1(x, edge_index, edge_attr)
-        x = F.relu(x)
-        x, edge_attr = self.gat_conv_2(x, edge_index, edge_attr)
+        # x, edge_index, edge_attr = data.x, data.edge_index, data.edge_attr
+        data.x = self.stem(data.x)
+        data.x, data.edge_attr = self.gat_conv_1(data)
+        data.x = F.relu(data.x)
+        data.x, data.edge_attr = self.gat_conv_2(data)
         # x = self.softmax(x)
-        edge_attr = self.sigmoid(edge_attr)
+        data.edge_attr = self.sigmoid(data.edge_attr)
 
-        return x, edge_attr
+        return data.x, data.edge_attr.squeeze()

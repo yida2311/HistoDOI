@@ -17,7 +17,7 @@ class DoiDataset(InMemoryDataset):
     """
     def __init__(self, root, config, dataname='doi', train=True, root_mask=None, tranform=None, pre_transform=None, pre_filter=None):
         self.max_num_nodes = config["max_num_nodes"]  # [10,10,30]
-        self.min_node_size = config["min_node_size"] #　30
+        self.min_node_area = config["min_node_area"] #　30
         self.num_edges_per_class = config["num_edges_per_class"] # 4
         self.node_resize = config["node_resize"] #　16
         self.train = train
@@ -26,7 +26,7 @@ class DoiDataset(InMemoryDataset):
         self.raw = os.path.join(root, dataname+'_raw')
         self.processed = os.path.join(root, dataname+'_processed')
         super(DoiDataset, self).__init__(root=root, transform=tranform, pre_transform=pre_transform, pre_filter=pre_filter)
-        self.x, self.slices = torch.load(self.processed_paths[0])
+        self.data, self.slices = torch.load(self.processed_paths[0])
 
     #返回原始文件列表
     @property
@@ -46,6 +46,7 @@ class DoiDataset(InMemoryDataset):
                 mask = cv2.imread(os.path.join(self.root_mask, slide_name.split('.')[0]+'.png'))
             else:
                 mask = None
+            print(slide_name)
             data = self.slide2graph(slide, mask=mask)
             data_list.append(data)
         
@@ -61,7 +62,7 @@ class DoiDataset(InMemoryDataset):
 
 
     def slide2graph(self, slide, mask=None):
-        nodes, spa, info, cnt = slide2component(slide, self.node_resize, self.min_node_size, self.max_num_nodes)
+        nodes, spa, info, cnt = slide2component(slide, self.node_resize, self.min_node_area, self.max_num_nodes)
         # nodes: Nx4x size x size; spa: Nx4
         num_nodes = cnt[0] + cnt[1] + cnt[2]
 

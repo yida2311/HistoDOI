@@ -1,17 +1,21 @@
 import os
+import sys
+sys.path.append('../')
 import random
+import time
 import argparse
-import tqdm
 import torch
 import torch_geometric
 
+from tqdm import tqdm
 import numpy as np 
 from torch import nn
 from torch_geometric.data import DataLoader
+from torch.utils.tensorboard import SummaryWriter
 
 from utils.metrics import AverageMeter
+from utils.lr_scheduler import LR_Scheduler
 from scripts.helper_seg import create_model_load_weights, get_optimizer
-from utils.lr_schedulter import LR_Scheduler
 from data.graph_dataset import DoiDataset
 from network.gcn import DoiNet
 from helper import Trainer, Evaluator, seed_everything, save_model, write_log, write_summaryWriter
@@ -21,8 +25,10 @@ class Args():
     def __init__(self):
         parser = argparse.ArgumentParser(description='OSCC EdgeGAT for DOI measurement')
         parser.add_argument('--n_class', type=int, default=3, help='segmentation classes')
-        parser.add_argument('--max_num_nodes', type=list[int], default=[10,10,30], help='maximum number of nodes for each catergory')
-        parser.add_argument('--min_node_size', type=int, default=30, help='minimum size w.r.t connnected component to extract node')
+        parser.add_argument('--num_normal', type=int, default=10, help='maximum number of nodes for normal')
+        parser.add_argument('--num_mucosa', type=int, default=10, help='maximum number of nodes for normal')
+        parser.add_argument('--num_tumor', type=int, default=30, help='maximum number of nodes for tumor')
+        parser.add_argument('--min_node_area', type=int, default=30, help='minimum area w.r.t connnected component to extract node')
         parser.add_argument('--num_edges_per_class', type=int, default=4, help='number of edges for each small(not in topk) node in graph')
         parser.add_argument('--node_resize', type=int, default=16, help='size of node after resize from connected components')
         parser.add_argument('--scheduler', type=str, default='poly', help='learning rate scheduler')
@@ -41,12 +47,13 @@ class Args():
         parser.add_argument('--lr', type=float, default=1e-3, help='learning rate')
         parser.add_argument('--ckpt_path', type=str, default="", help='name for seg model path')
         parser.add_argument('--alpha', type=float, default=1.0, help='weight for edge criterion w.r.t node criterion')
-    
+        self.parser = parser
+
     def parse(self):
         args = self.parser.parse_args()
         config = {}
-        config['max_num_nodes'] = args.max_num_nodes
-        config['min_node_size'] = args.min_node_size
+        config['max_num_nodes'] = [args.num_normal, args.num_mucosa, args.num_tumor]
+        config['min_node_area'] = args.min_node_area
         config['num_edges_per_class'] = args.num_edges_per_class
         config['node_resize'] = args.node_resize
         args.config = config
@@ -97,7 +104,7 @@ def main(seed=25):
     dataset_train = DoiDataset(img_path_train, config, train=True, root_mask=mask_path_train)
     dataloader_train = DataLoader(dataset_train, batch_size=batch_size, shuffle=True, num_workers=num_workers)
     dataset_val = DoiDataset(img_path_val, config, train=True, root_mask=mask_path_val)
-    dataloader_val = DataLoader(dataset_train, batch_size=batch_size, shuffle=False, num_workers=num_workers)
+    dataloader_val = DataLoader(dataset_val, batch_size=batch_size, shuffle=False, num_workers=num_workers)
     
     ###################################
     print("creating models......")
@@ -116,12 +123,11 @@ def main(seed=25):
     criterion_edge = nn.BCELoss(reduction='mean')
     alpha = args.alpha
 
-    if not evaluation:
     writer = SummaryWriter(log_dir=log_path + task_name)
     f_log = open(log_path + task_name + ".log", 'w')
     #######################################
-    trainer = Trainer(criterion_node, criterion_edge, optimizer, n_class, alpha=alpha)
-    evaluator = Evaluator(n_class)
+    trainer = Trainer(criterion_node, criterion_edge, optimizer, n_class, device, alpha=alpha)
+    evaluator = Evaluator(n_class, device)
 
     best_pred = 0.0
     print("start training......")
@@ -131,7 +137,7 @@ def main(seed=25):
     print(log)
     f_log.write(log)
     f_log.flush()
-
+    
     for epoch in range(num_epochs):
         optimizer.zero_grad()
         tbar = tqdm(dataloader_train)
@@ -178,7 +184,7 @@ def main(seed=25):
                 
                     batch_time.update(time.time()-start_time)
                     tbar.set_description('F1 node: %.4f  F1 edge: %.4f; data time: %.2f; batch time: %.2f' % 
-                                        val_scores_node["macro_f1"], val_scores_edge["macro_f1"], data_time.avg, batch_time.avg))
+                                        (val_scores_node["macro_f1"], val_scores_edge["macro_f1"], data_time.avg, batch_time.avg))
                     start_time = time.time()
             
             data_time.reset()
@@ -186,9 +192,9 @@ def main(seed=25):
             val_scores_node, val_scores_node = evaluator.get_scores()
             evaluator.reset_metrics()
 
-            best_pred = save_model(model, model_path, val_scores_node, val_scores_edge, task_name, epoch, best_pred)
-            write_log(f_log, train_scores_node, train_scores_edge, val_scores_node, val_scores_edge, epoch)
-            write_summaryWriter(writer, train_loss, optimizer, train_scores_node, train_scores_edge, val_scores_node, val_scores_edge, epoch)
+            best_pred = save_model(model, model_path, val_scores_node, val_scores_edge, alpha, task_name, epoch, best_pred)
+            write_log(f_log, train_scores_node, train_scores_edge, val_scores_node, val_scores_edge, epoch, num_epochs)
+            write_summaryWriter(writer, train_loss/len(dataloader_train), optimizer, train_scores_node, train_scores_edge, val_scores_node, val_scores_edge, epoch)
             
     f_log.close()
 
