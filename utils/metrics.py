@@ -37,10 +37,10 @@ class ConfusionMatrixCls(object):
         # print('FP  ', FP)
         # print('FN  ', FN)
 
-        precision = TP / (TP + FP)
-        recall = TP / (TP + FN)
-        f1 = 2 * TP / (2*TP + FP + FN)
-        iou = TP / (TP + FP + FN)
+        precision = TP / (TP + FP + 1)
+        recall = TP / (TP + FN + 1)
+        f1 = 2 * TP / (2*TP + FP + FN + 1)
+        iou = TP / (TP + FP + FN + 1)
 
         macro_precision = np.mean(precision)
         macro_recall = np.mean(recall)
