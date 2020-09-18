@@ -208,8 +208,11 @@ class SlideInference(object):
         template[template==0] = 1
         output = output / template
         prediction = np.argmax(output, axis=0)
+
+        output = torch.from_numpy(output).unsqueeze(0)
+        output = F.interpolate(output, size=(dataset.slide_size[0]//4, dataset.slide_size[1]//4), mode='bilinear')
         
-        return prediction, class_to_RGB(prediction), np.resize(output, (self.n_class, dataset.slide_size[0]//4, dataset.slide_size[1]//4))
+        return prediction, class_to_RGB(prediction), output.squeeze(0).numpy()
 
 def struct_time():
     # 格式化成2020-08-07 16:56:32

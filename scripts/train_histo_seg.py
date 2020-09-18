@@ -100,7 +100,7 @@ criterion1 = FocalLoss(gamma=3)
 criterion2 = nn.CrossEntropyLoss(reduction='mean')
 criterion3 = SymmetricCrossEntropyLoss(alpha=args.alpha, beta=args.beta, num_classes=n_class)
 criterion4 = NormalizedSymmetricCrossEntropyLoss(alpha=args.alpha, beta=args.beta, num_classes=n_class)
-criterion = lambda x,y: criterion2(x, y)
+criterion = lambda x,y: criterion3(x, y)
 
 if not evaluation:
     writer = SummaryWriter(log_dir=log_path + task_name)
