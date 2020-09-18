@@ -174,7 +174,6 @@ class UnetDecoder(nn.Module):
                 )
             )
 
-        encoder_channels = encoder_channels[1:]  # remove first skip with same spatial resolution
         encoder_channels = encoder_channels[::-1]  # reverse channels to start from head of encoder
 
         # computing blocks input and output channels
