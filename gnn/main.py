@@ -30,7 +30,7 @@ class Args():
         parser.add_argument('--num_tumor', type=int, default=30, help='maximum number of nodes for tumor')
         parser.add_argument('--min_node_area', type=int, default=30, help='minimum area w.r.t connnected component to extract node')
         parser.add_argument('--num_edges_per_class', type=int, default=4, help='number of edges for each small(not in topk) node in graph')
-        parser.add_argument('--node_resize', type=int, default=16, help='size of node after resize from connected components')
+        parser.add_argument('--min_descriptor', type=int, default=30, help='size of Fourier desciptor for connected component')
         parser.add_argument('--scheduler', type=str, default='poly', help='learning rate scheduler')
         parser.add_argument('--img_path_train', type=str, help='path to train dataset where images store')
         parser.add_argument('--mask_path_train', type=str, help='path to train dataset where masks store')
@@ -55,7 +55,7 @@ class Args():
         config['max_num_nodes'] = [args.num_normal, args.num_mucosa, args.num_tumor]
         config['min_node_area'] = args.min_node_area
         config['num_edges_per_class'] = args.num_edges_per_class
-        config['node_resize'] = args.node_resize
+        config['min_descriptor'] = args.min_descriptor
         args.config = config
 
         return args
@@ -108,7 +108,7 @@ def main(seed=25):
     
     ###################################
     print("creating models......")
-    model = DoiNet(n_class)
+    model = DoiNet(n_class, config['min_descriptor']+6, 4)
     model = create_model_load_weights(model, evaluation=False, ckpt_path=args.ckpt_path)
     model.to(device)
 
@@ -119,8 +119,8 @@ def main(seed=25):
     optimizer = get_optimizer(model, learning_rate=learning_rate)
     scheduler = LR_Scheduler(args.scheduler, learning_rate, num_epochs, len(dataloader_train))
     ##################################
-    criterion_node = nn.CrossEntropyLoss(reduction='mean')
-    criterion_edge = nn.BCELoss(reduction='mean')
+    criterion_node = nn.CrossEntropyLoss()
+    criterion_edge = nn.BCELoss()
     alpha = args.alpha
 
     writer = SummaryWriter(log_dir=log_path + task_name)

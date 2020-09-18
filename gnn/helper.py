@@ -86,6 +86,8 @@ class Trainer():
         label_edge = sample.edge_label.to(self.device)
 
         node, edge = model(sample)
+        print('node', node, 'label_node', label_node)
+        print('edge', edge, 'label_edge', label_edge)
         loss_node = self.criterion_node(node, label_node)
         loss_edge = self.criterion_edge(edge, label_edge)
         loss = loss_node + self.alpha * loss_edge

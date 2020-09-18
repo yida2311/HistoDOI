@@ -19,7 +19,7 @@ class DoiDataset(InMemoryDataset):
         self.max_num_nodes = config["max_num_nodes"]  # [10,10,30]
         self.min_node_area = config["min_node_area"] #　30
         self.num_edges_per_class = config["num_edges_per_class"] # 4
-        self.node_resize = config["node_resize"] #　16
+        self.min_descriptor = config["min_descriptor"] #　16
         self.train = train
         self.root_mask = root_mask
 
@@ -62,8 +62,8 @@ class DoiDataset(InMemoryDataset):
 
 
     def slide2graph(self, slide, mask=None):
-        nodes, spa, info, cnt = slide2component(slide, self.node_resize, self.min_node_area, self.max_num_nodes)
-        # nodes: Nx4x size x size; spa: Nx4
+        nodes, spa, info, cnt = slide2component(slide, self.min_descriptor, self.min_node_area, self.max_num_nodes)
+        # nodes: Nx(size+6); spa: Nx4
         num_nodes = cnt[0] + cnt[1] + cnt[2]
 
         edges, edges_index = edgeGeneration(spa, cnt, self.num_edges_per_class)

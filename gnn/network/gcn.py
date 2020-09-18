@@ -10,23 +10,6 @@ from torch_geometric.utils import remove_self_loops, add_self_loops, softmax
 from torch_geometric.nn.inits import glorot, zeros
 
 
-class Stem(nn.Module):
-    def __init__(self, in_channels, out_channels):
-        super(Stem, self).__init__()
-        self.conv1 = nn.Conv2d(in_channels=in_channels, out_channels=out_channels, kernel_size=3, stride=2, padding=1)
-        self.norm = nn.GroupNorm(num_groups=4, num_channels=out_channels)
-        self.pool = nn.AdaptiveAvgPool2d((1,1))
-    
-    def forward(self, x):
-        n = x.size(0)
-        x = self.conv1(x)
-        x = F.relu(self.norm(x))
-        x = self.pool(x)
-        x = x.reshape((n, -1))
-
-        return x
-        
-
 class EdgeGATConv(GATConv):
     """
     Args:
@@ -162,20 +145,20 @@ class EdgeGATConv(GATConv):
 
 
 class DoiNet(nn.Module):
-    def __init__(self, num_classes):
+    def __init__(self, num_classes, node_in_channels, edge_in_channels):
         super(DoiNet, self).__init__()
-        self.stem = Stem(in_channels=4, out_channels=64) #　out shape: N x 64
-        self.gat_conv_1 = EdgeGATConv(64, 32, 4, 8, heads=3, concat=False, dropout=0, add_self_loops=True)
-        self.gat_conv_2 = EdgeGATConv(32, num_classes, 8, 1, heads=1, concat=True, dropout=0, add_self_loops=True)
-        self.softmax = nn.Softmax(dim=1)
+        self.gat_conv_1 = EdgeGATConv(node_in_channels, 64, edge_in_channels, 16, heads=3, concat=False, dropout=0.1, add_self_loops=True)
+        self.bn1_node = nn.BatchNorm1d(num_features=64)
+        self.bn1_edge = nn.BatchNorm1d(num_features=16)
+        self.gat_conv_2 = EdgeGATConv(64, num_classes, 16, 1, heads=1, concat=True, dropout=0.1, add_self_loops=True)
         self.sigmoid = nn.Sigmoid()
     
     
     def forward(self, data):
         # x, edge_index, edge_attr = data.x, data.edge_index, data.edge_attr
-        data.x = self.stem(data.x)
         data.x, data.edge_attr = self.gat_conv_1(data)
-        data.x = F.relu(data.x)
+        data.x = F.relu(self.bn1_node(data.x))
+        data.edge_attr = F.relu(self.bn1_edge(data.edge_attr))
         data.x, data.edge_attr = self.gat_conv_2(data)
         # x = self.softmax(x)
         data.edge_attr = self.sigmoid(data.edge_attr)

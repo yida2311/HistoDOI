@@ -6,6 +6,7 @@ import random
 import math 
 import cv2
 
+from utils.data import class_to_RGB
 
 def slide2component(slide, size, min_area, num_nodes):
     """Transform slide to connected components to construct graph
@@ -15,6 +16,7 @@ def slide2component(slide, size, min_area, num_nodes):
     _, thresh0 = cv2.threshold(mask, 0, 255, cv2.THRESH_BINARY)
     _, thresh1 = cv2.threshold(mask, 1, 255, cv2.THRESH_BINARY)
     _, thresh2 = cv2.threshold(mask, 2, 255, cv2.THRESH_BINARY)
+
     normal = thresh0 - thresh1
     mucosa = thresh1 - thresh2
     tumor = thresh2
@@ -28,16 +30,18 @@ def slide2component(slide, size, min_area, num_nodes):
     res2, num2 = parseComponent(slide, n2, label2, stats2, centroids2, size=size, min_area=min_area, maxNum=num_nodes[1])
     res3, num3 = parseComponent(slide, n3, label3, stats3, centroids3, size=size, min_area=min_area, maxNum=num_nodes[2])
     res = res1 + res2 + res3
-
     print(num1, num2, num3)
-    cmp = torch.cat([c[0] for c in res], dim=0) # Nx4xsizexsize
+
+    assert num2 > 1
+    
+    cmp = torch.stack([c[0] for c in res], dim=0) # Nx(size+6)
     spa = torch.stack([c[1] for c in res], dim=0) # Nx4
     info = [c[2] for c in res]
     cnt = (num1, num2, num3)
     return cmp, spa, info, cnt
 
 
-def parseComponent(slide, n, label, stats, centroids, size=16, min_area=64, maxNum=30):
+def parseComponent(slide, n, label, stats, centroids, size=32, min_area=64, maxNum=30):
     """parse and filter connected components
     Args:
         slide (numpy array): slide feature
@@ -45,18 +49,18 @@ def parseComponent(slide, n, label, stats, centroids, size=16, min_area=64, maxN
         label (numpy array): marked connected components mask
         stats (numpy array): n x 5, connected components' status including x, y, h, w, area
         centroids (numpy array): n x 2, connected components' centroids
-        size (int): resize connected components to size
+        size (int): size of Fourier descriptor of connected components
         min_area (int): threshold of connected component selection
         maxNum: maximum number of selected connected components
     Output:
         res (list): connected components feature, spatial feature, information
     """
-    slide = torch.from_numpy(slide).float()
-    label = torch.from_numpy(label)
+    # slide = torch.from_numpy(slide).float()
+    # label = torch.from_numpy(label)
     res = []
     area_hist = []
     for i in range(1, n):
-        if stats[i][2] > 1 and stats[i][3] > 1:
+        if stats[i][2] > 2 and stats[i][3] > 2 and stats[i][4] > min_area:
             area_hist.append((stats[i][4], i))
     
     area_hist.sort(key=lambda x: x[0], reverse=True)
@@ -64,10 +68,18 @@ def parseComponent(slide, n, label, stats, centroids, size=16, min_area=64, maxN
         area_hist = area_hist[:maxNum]
 
     for area, i in area_hist:
-        patch = slide[:, stats[i][1]:stats[i][1]+stats[i][3], stats[i][0]:stats[i][0]+stats[i][2]]
-        mask = label[stats[i][1]:stats[i][1]+stats[i][3], stats[i][0]:stats[i][0]+stats[i][2]]
-        feat = patch*(mask==i)
-        cmp = torch.FloatTensor(F.interpolate(feat.unsqueeze(0), size=(size, size), mode='bilinear'))
+        patch = slide[:, stats[i][1]:stats[i][1]+stats[i][3], stats[i][0]:stats[i][0]+stats[i][2]]  # component feature (4 x h x w)
+        mask = label[stats[i][1]:stats[i][1]+stats[i][3], stats[i][0]:stats[i][0]+stats[i][2]] # component bbox mask (h x w)
+        thresh = mask == i # component binary mask (h x w)
+        patch = patch * thresh # masked feature
+
+        shape_feat = fourierDescriptor(thresh, min_descriptor=size) # shape feature (size)
+        cls_feat = np.sum(patch, axis=(1, 2)) / np.sum(thresh, axis=(0, 1)) # category feature (4)
+        size_feat = np.log(stats[i][2:4])  # size feature (2)
+        # print(shape_feat.shape, cls_feat.shape, size_feat.shape)
+        cmp = np.concatenate((shape_feat, cls_feat, size_feat), axis=None) # cmp feature (size+6)
+        
+        cmp = torch.FloatTensor(cmp)
         spa = torch.FloatTensor([centroids[i][1], centroids[i][0], stats[i][3], stats[i][2]]) # row, col, h, w
         info = {"bbox":stats[i][:4], "area":stats[i][4], "centroid":centroids[i]}
         res.append([cmp, spa, info]) # component, spatial, info
@@ -138,8 +150,8 @@ def relation_encoding(spa, i, j):
     edge[0] = np.log(edge[0]+1) if edge[0] > 0 else -np.log(-edge[0]+1)
     edge[1] = s_j[1] - s_i[1]  # yj - yi
     edge[1] = np.log(edge[1]+1) if edge[1] > 0 else -np.log(-edge[1]+1)
-    edge[2] = torch.log(s_j[2]/s_i[2]) #　ln(hj/hi)
-    edge[3] = torch.log(s_j[3]/s_i[3]) #　ln(wj/wi)
+    edge[2] = np.log(s_j[2]/s_i[2]) #　ln(hj/hi)
+    edge[3] = np.log(s_j[3]/s_i[3]) #　ln(wj/wi)
 
     return edge
 
@@ -174,5 +186,27 @@ def getLabelFromMask(mask):
         
     return hist.index(max(hist))
 
+
+
+def fourierDescriptor(mask, min_descriptor=32):
+    """Ref: https://www.pythonf.cn/read/3418 """
+    mask = cv2.convertScaleAbs(np.array(mask, dtype=np.int32))
+    cnt, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
+    cnt_array = cnt[0][:, 0, :]
+    cnt_complex = np.empty(cnt_array.shape[:-1], dtype=complex)
+    cnt_complex.real = cnt_array[:, 0] #　横坐标作为实数部分
+    cnt_complex.imag = cnt_array[:, 1] #　纵坐标作为虚数部分
+    fourier_res = np.fft.fft(cnt_complex)
+    # print(fourier_res)
+    #　截断傅里叶描述子
+    descriptor = np.fft.fftshift(fourier_res)
+    # print(descriptor)
+    center_index = len(descriptor) // 2
+    low, high = center_index - min_descriptor // 2, center_index + min_descriptor // 2
+    descriptor = descriptor[low:high]
+    # print(descriptor)
+    descriptor = np.fft.ifftshift(descriptor)
+
+    return abs(descriptor)
 
 
