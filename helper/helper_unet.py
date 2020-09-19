@@ -1,5 +1,5 @@
 from __future__ import absolute_import, division, print_function
-
+import os 
 import cv2
 import math
 import numpy as np
@@ -13,32 +13,40 @@ from dataset.dataset_seg import collate
 from utils.data import class_to_RGB
 
 
-def create_model_load_weights(model, evaluation=False, ckpt_path=None):
-    if evaluation and ckpt_path:
-        state_dict = torch.load(ckpt_path)
-        if 'module' in next(iter(state_dict)):
-            state_dict = Parallel2Single(state_dict)
-        state = model.state_dict()
-        state.update(state_dict)
-        model.load_state_dict(state)
-    return model
+def save_ckpt_model(model, cfg, scores, best_pred, epoch):
+    if scores['iou_mean'] > best_pred:
+        best_pred = scores['iou_mean']
+        save_path = os.path.join(cfg.model_path, "%s-%d-%.5f.pth"%(cfg.model+'-'+cfg.backbone, epoch, best_pred))
+        torch.save(model.state_dict(), save_path)
+    
+    return best_pred
 
 
-def create_model_load_weights_v2(model, evaluation=False, ckpt_path=None):
-    if evaluation and ckpt_path:
-        state_dict = torch.load(ckpt_path, map_location=torch.device('cpu'))['state_dict']
-        if 'module' in next(iter(state_dict)):
-            state_dict = Parallel2Single(state_dict)
-        state = model.state_dict()
-        state.update(state_dict)
-        model.load_state_dict(state)
-    return model
+def update_log(f_log, cfg, scores_train, scores_val, epoch):
+    log = ""
+    log = log + 'epoch [{}/{}] mIoU: train = {:.4f}, val = {:.4f}'.format(epoch+1, cfg.num_epochs, scores_train['iou_mean'], scores_val['iou_mean']) + "\n"
+    log = log + "[train] IoU = " + str(scores_train['iou']) + "\n"
+    log = log + "[train] Dice = " + str(scores_train['dice']) + "\n"
+    log = log + "[train] Dice_mean = " + str(scores_train['dice_mean']) + "\n"
+    log = log + "[train] Accuracy = " + str(scores_train['accuracy'])  + "\n"
+    log = log + "[train] Accuracy_mean = " + str(scores_train['accuracy_mean'])  + "\n"
+    log = log + "------------------------------------ \n"
+    log = log + "[val] IoU = " + str(scores_val['iou']) + "\n"
+    log = log + "[val] Dice = " + str(scores_val['dice']) + "\n"
+    log = log + "[val] Dice_mean = " + str(scores_val['dice_mean']) + "\n"
+    log = log + "[val] Accuracy = " + str(scores_val['accuracy'])  + "\n"
+    log = log + "[val] Accuracy_mean = " + str(scores_val['accuracy_mean'])  + "\n"
+    log += "================================\n"
+    print(log)
+    f_log.write(log)
+    f_log.flush()
 
-
-def get_optimizer(model, learning_rate=2e-5):
-    optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate, weight_decay=5e-4)
-    # optimizer = torch.optim.SGD(model.parameters(), lr=learning_rate, momentum=0.9, weight_decay=1e-4)
-    return optimizer
+def update_writer(writer, writer_info, epoch):
+    for k, v in writer_info.items():
+        if isinstance(v, dict):
+            writer.add_scalars(k, v, epoch)
+        else:
+            writer.add_scalar(k, v, epoch)
 
 
 class Trainer(object):
@@ -214,10 +222,7 @@ class SlideInference(object):
         
         return prediction, class_to_RGB(prediction), output.squeeze(0).numpy()
 
-def struct_time():
-    # 格式化成2020-08-07 16:56:32
-    cur_time = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
-    return cur_time
+
 
 
 
