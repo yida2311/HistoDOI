@@ -1,3 +1,4 @@
+import os
 import cv2
 import numpy as np
 import torch
@@ -148,9 +149,17 @@ def one_hot_gaussian_blur(index, classes):
     return mask
 
 
-def model_load_weights(model, mode=1, evaluation=False, path_g=None, path_g2l=None, path_l2g=None):
-    model = model.cuda()
-
+def create_model_load_weights(model, global_fixed, device, mode=1, local_rank=0, evaluation=False, path_g=None, path_g2l=None, path_l2g=None):
+    # to cuda and dirstributed
+    model = nn.SyncBatchNorm.convert_sync_batchnorm(model)
+    model.to(device)
+    model = nn.parallel.DistributedDataParallel(model, device_ids=[local_rank], output_device=local_rank, find_unused_parameters=True)
+    if global_fixed:
+        global_fixed = nn.SyncBatchNorm.convert_sync_batchnorm(global_fixed)
+        global_fixed.to(device)
+        global_fixed = nn.parallel.DistributedDataParallel(global_fixed, device_ids=[local_rank], output_device=local_rank, find_unused_parameters=True)
+  
+    # load checkpoint
     if (mode == 2 and not evaluation) or (mode == 1 and evaluation):
         # load fixed basic global branch
         partial = torch.load(path_g)
@@ -172,12 +181,8 @@ def model_load_weights(model, mode=1, evaluation=False, path_g=None, path_g2l=No
         # 3. load the new state dict
         model.load_state_dict(state)
 
-    global_fixed = None
     if mode == 3:
         # load fixed basic global branch
-        global_fixed = fpn(n_class)
-        global_fixed = nn.DataParallel(global_fixed)
-        global_fixed = global_fixed.cuda()
         partial = torch.load(path_g)
         state = global_fixed.state_dict()
         # 1. filter out unnecessary keys
@@ -265,7 +270,7 @@ class Trainer(object):
         self.metrics_global.reset()
 
     def train(self, sample, model, global_fixed):
-        images, labels = sample['image'], sample['label'] # PIL images
+        images, labels = sample['image'], sample['mask'] # PIL images
         labels_npy = masks_transform(labels, numpy=True) # label of origin size in numpy
 
         images_glb = resize(images, self.size_g) # list of resized PIL images
@@ -401,7 +406,7 @@ class Evaluator(object):
         with torch.no_grad():
             images = sample['image']
             if not self.test:
-                labels = sample['label'] # PIL images
+                labels = sample['mask'] # PIL images
                 labels_npy = masks_transform(labels, numpy=True)
 
             images_global = resize(images, self.size_g)
@@ -523,9 +528,88 @@ class Evaluator(object):
                 return None, predictions_global, None
 
 
+def save_ckpt_model(model, cfg, score, score_global, best_pred, epoch):
+    if cfg.mode == 1:
+        if score_global["iou_mean"] >  best_pred:
+            best_pred = score_global["iou_mean"]
+            save_path = os.path.join(cfg.model_path, "%s-%d-%.5f.pth"%(cfg.model+'-'+cfg.backbone + '-' + cfg.mode_str[cfg.mode], epoch, best_pred))
+    else:
+        if score['iou_mean'] > best_pred:
+            best_pred = score['iou_mean']
+            save_path = os.path.join(cfg.model_path, "%s-%d-%.5f.pth"%(cfg.model+'-'+cfg.backbone + '-' + cfg.mode_str[cfg.mode], epoch, best_pred))
+            torch.save(model.state_dict(), save_path)
+    
+    return best_pred
 
 
+def update_log(f_log, cfg, scores_train, scores_val, epoch):
+    log = ""
+    if cfg.mode == 1:
+        log = log + 'epoch [{}/{}] global mIoU: train = {:.4f}, val = {:.4f}'.format(epoch+1, cfg.num_epochs, scores_train[1]['iou_mean'], scores_val[1]['iou_mean']) + "\n"
+        log = log + "[train] global IoU = " + str(scores_train[1]['iou']) + "\n"
+        log = log + "[train] global Dice = " + str(scores_train[1]['dice']) + "\n"
+        log = log + "[train] global Dice_mean = " + str(scores_train[1]['dice_mean']) + "\n"
+        log = log + "[train] global Accuracy = " + str(scores_train[1]['accuracy'])  + "\n"
+        log = log + "[train] global Accuracy_mean = " + str(scores_train[1]['accuracy_mean'])  + "\n"
+        log = log + "------------------------------------ \n"
+        log = log + "[val] global IoU = " + str(scores_val[1]['iou']) + "\n"
+        log = log + "[val] global Dice = " + str(scores_val[1]['dice']) + "\n"
+        log = log + "[val] global Dice_mean = " + str(scores_val[1]['dice_mean']) + "\n"
+        log = log + "[val] global Accuracy = " + str(scores_val[1]['accuracy'])  + "\n"
+        log = log + "[val] global Accuracy_mean = " + str(scores_val[1]['accuracy_mean'])  + "\n"
+        log += "================================\n"
+    else:
+        log = log + 'epoch [{}/{}] mIoU: train = {:.4f}, val = {:.4f}'.format(epoch+1, cfg.num_epochs, scores_train[0]['iou_mean'], scores_val[0]['iou_mean']) + "\n"
+        log = log + 'epoch [{}/{}] global mIoU: train = {:.4f}, val = {:.4f}'.format(epoch+1, cfg.num_epochs, scores_train[1]['iou_mean'], scores_val[1]['iou_mean']) + "\n"
+        log = log + 'epoch [{}/{}] local mIoU: train = {:.4f}, val = {:.4f}'.format(epoch+1, cfg.num_epochs, scores_train[2]['iou_mean'], scores_val[2]['iou_mean']) + "\n"
+        log = log + "[train] IoU = " + str(scores_train[0]['iou']) + "\n"
+        log = log + "[train] Dice = " + str(scores_train[0]['dice']) + "\n"
+        log = log + "[train] Dice_mean = " + str(scores_train[0]['dice_mean']) + "\n"
+        log = log + "[train] Accuracy = " + str(scores_train[0]['accuracy'])  + "\n"
+        log = log + "[train] Accuracy_mean = " + str(scores_train[0]['accuracy_mean'])  + "\n"
+        log = log + "------------------------------------ \n"
+        log = log + "[val] IoU = " + str(scores_val[0]['iou']) + "\n"
+        log = log + "[val] Dice = " + str(scores_val[0]['dice']) + "\n"
+        log = log + "[val] Dice_mean = " + str(scores_val[0]['dice_mean']) + "\n"
+        log = log + "[val] Accuracy = " + str(scores_val[0]['accuracy'])  + "\n"
+        log = log + "[val] Accuracy_mean = " + str(scores_val[0]['accuracy_mean'])  + "\n"
+        log += "================================\n"
+        log = log + "[train] global IoU = " + str(scores_train[1]['iou']) + "\n"
+        log = log + "[train] global Dice = " + str(scores_train[1]['dice']) + "\n"
+        log = log + "[train] global Dice_mean = " + str(scores_train[1]['dice_mean']) + "\n"
+        log = log + "[train] global Accuracy = " + str(scores_train[1]['accuracy'])  + "\n"
+        log = log + "[train] global Accuracy_mean = " + str(scores_train[1]['accuracy_mean'])  + "\n"
+        log = log + "------------------------------------ \n"
+        log = log + "[val] global IoU = " + str(scores_val[1]['iou']) + "\n"
+        log = log + "[val] global Dice = " + str(scores_val[1]['dice']) + "\n"
+        log = log + "[val] global Dice_mean = " + str(scores_val[1]['dice_mean']) + "\n"
+        log = log + "[val] global Accuracy = " + str(scores_val[1]['accuracy'])  + "\n"
+        log = log + "[val] global Accuracy_mean = " + str(scores_val[1]['accuracy_mean'])  + "\n"
+        log += "================================\n"
+        log = log + "[train] local IoU = " + str(scores_train[2]['iou']) + "\n"
+        log = log + "[train] local Dice = " + str(scores_train[2]['dice']) + "\n"
+        log = log + "[train] local Dice_mean = " + str(scores_train[2]['dice_mean']) + "\n"
+        log = log + "[train] local Accuracy = " + str(scores_train[2]['accuracy'])  + "\n"
+        log = log + "[train] local Accuracy_mean = " + str(scores_train[2]['accuracy_mean'])  + "\n"
+        log = log + "------------------------------------ \n"
+        log = log + "[val] local IoU = " + str(scores_val[2]['iou']) + "\n"
+        log = log + "[val] local Dice = " + str(scores_val[2]['dice']) + "\n"
+        log = log + "[val] local Dice_mean = " + str(scores_val[2]['dice_mean']) + "\n"
+        log = log + "[val] local Accuracy = " + str(scores_val[2]['accuracy'])  + "\n"
+        log = log + "[val] local Accuracy_mean = " + str(scores_val[2]['accuracy_mean'])  + "\n"
+        log += "================================\n"
+        
+    print(log)
+    f_log.write(log)
+    f_log.flush()
 
+
+def update_writer(writer, writer_info, epoch):
+    for k, v in writer_info.items():
+        if isinstance(v, dict):
+            writer.add_scalars(k, v, epoch)
+        else:
+            writer.add_scalar(k, v, epoch)
 
 
 

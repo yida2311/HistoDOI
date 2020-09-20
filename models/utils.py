@@ -5,32 +5,6 @@ import numpy as np
 from collections import OrderedDict
 
 
-def Parallel2Single(original_state):
-    converted = OrderedDict()
-    for k, v in original_state.items():
-        name = k[7:]
-        converted[name] = v
-    return converted
-
-
-def load_state_dict(src, target):
-    # pdb.set_trace()
-    for k,v in src.items():
-        if 'bn' in k:
-            continue
-        if k in target.state_dict().keys():
-            try:
-                v = v.numpy()
-            except RuntimeError:
-                v = v.detach().numpy()
-            try:
-                target.state_dict()[k].copy_(torch.from_numpy(v))
-            except:
-                print("{} skipped".format(k))
-                continue   
-    set_requires_grad(target, True)
-    return target
-
 def set_requires_grad(nets, requires_grad=False):
     if not isinstance(nets, list):
         nets = [nets]
