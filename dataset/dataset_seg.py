@@ -159,7 +159,12 @@ def collate(batch):
     return batch_dict
 
 
-
+def collateGL(batch):
+    batch_dict = {}
+    for key in batch[0].keys():
+        batch_dict[key] = [b[key] for b in batch]
+    
+    return batch_dict
 
 
 

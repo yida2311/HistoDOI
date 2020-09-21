@@ -9,33 +9,30 @@ class Config:
         self.n_class = 4
         self.mode = 1 # 1:g 2:g2l 3:l2g
         self.model_cfg = {
-            'encoder_depth': 5,
-            'encoder_weights': 'imagenet',
-            'decoder_use_batchnorm': True,
             'decoder_channels': (512, 256, 128, 64, 64),
-            'decoder_attention_type': 'scse',
-            'in_channels': 3,
+            'attention_type': 'scse',
         }
         self.size_g = 4000
         self.size_p = 832
 
+        root = '/remote-home/my/OSCC-Tile-v2/5x_5000/'
         # data config
         self.trainset_cfg = {
-            "img_dir": "",
-            "mask_dir": "",
-            "meta_file": "",
+            "img_dir": root + "train/",
+            "mask_dir": root + "train_mask/",
+            "meta_file": root + "train_5000.csv",
             "label": True,
         }
         self.valset_cfg = {
-            "img_dir": "",
-            "mask_dir": "",
-            "meta_file": "",
+            "img_dir": root + "val/",
+            "mask_dir": root + "val_mask/",
+            "meta_file": root + "val_5000.csv",
             "label": True,
         }
         self.slideset_cfg = {  # for slide level inference
-            "img_dir": "",
-            "meta_file": "",
-            "mask_dir": "",
+            "img_dir": root + "val/",
+            "meta_file": root + "tile_info_val_5000.json",
+            "mask_dir": root + "val_mask/",
             "label": True,
         }
 
@@ -44,7 +41,7 @@ class Config:
         self.lr = 1e-4
         self.num_epochs = 150
         self.warmup_epochs = 2
-        self.batch_size = 8
+        self.batch_size = 2
         self.sub_batch_size = 8
         ckpt_path = "" # pretrained model
         self.path_g = os.path.join(ckpt_path, "")
@@ -73,7 +70,7 @@ class Config:
 
         # task name
         self.mode_str = ["g", "g2l", "l2g"]
-        self.task_name = "-".join([self.model, self.backbone, self.mode_str[self.mode], self.loss, self.scheduler, str(self.lr), str(self.num_epochs), simple_time()])
+        self.task_name = "-".join([self.model, self.encoder, self.mode_str[self.mode], self.loss, self.scheduler, str(self.lr), str(self.num_epochs), simple_time()])
         if train:
             self.task_name += "-" + "train"
         else:

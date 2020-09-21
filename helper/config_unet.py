@@ -67,7 +67,7 @@ class Config:
         self.cyclical_epoch = 20
 
         # task name
-        self.task_name = "-".join([self.model, self.backbone, self.loss, self.scheduler, str(self.lr), str(self.num_epochs), simple_time()])
+        self.task_name = "-".join([self.model, self.encoder, self.loss, self.scheduler, str(self.lr), str(self.num_epochs), simple_time()])
         if train:
             self.task_name += "-" + "train"
         else:

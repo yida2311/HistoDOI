@@ -4,14 +4,14 @@ import torch
 import cv2
 from tqdm import tqdm
 
-from .segmentor.dynamicUNet import UNet
-from .dataset.transformer_seg import TransformerSegVal
-from .dataset.dataset_seg import OralSlideSeg, collate
-from .utils.metrics import AverageMeter
-from .utils.data import class_to_RGB
-from .helper.helper_unet import SlideInference
-from .helper.utils import create_model_load_weights, create_model_load_weights_v2
-from .helper.config_unet import Config
+from segmentor.dynamicUNet import UNet
+from dataset.transformer_seg import TransformerSegVal
+from dataset.dataset_seg import OralSlideSeg, collate
+from utils.metrics import AverageMeter
+from utils.data import class_to_RGB
+from helper.helper_unet import SlideInference
+from helper.utils import create_model_load_weights, create_model_load_weights_v2
+from helper.config_unet import Config
 
 # # DPP 1
 # dist.init_process_group('nccl')
