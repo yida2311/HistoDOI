@@ -1,8 +1,7 @@
 from typing import Optional, Union, List
 from .decoder import UnetDecoder
-from ..encoders import get_encoder
-from ..base import SegmentationModel
-from ..base import SegmentationHead, ClassificationHead
+from ...encoders import get_encoder
+from segmentation_models_pytorch.base import SegmentationHead, SegmentationModel, ClassificationHead
 
 
 class Unet(SegmentationModel):

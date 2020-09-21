@@ -8,8 +8,7 @@ from torch.autograd import Variable
 from torchvision import transforms
 from PIL import Image
 
-from ..utils.metrics import ConfusionMatrixSeg
-from ..models.segmentor.GLNet.model import GLNet
+from .utils import ConfusionMatrixSeg
 
 
 transformer = transforms.Compose([

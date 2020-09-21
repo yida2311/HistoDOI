@@ -7,10 +7,7 @@ import torch
 import torch.nn.functional as F
 from PIL import Image
 
-from models.utils import Parallel2Single
-from utils.metrics import ConfusionMatrixSeg, AverageMeter
-from dataset.dataset_seg import collate
-from utils.data import class_to_RGB
+from .utils import Parallel2Single, ConfusionMatrixSeg, AverageMeter, class_to_RGB, collate
 
 
 def save_ckpt_model(model, cfg, scores, best_pred, epoch):

@@ -12,24 +12,24 @@ class globalBranch(nn.Module):
             self, 
             n_class, 
             encoder_channels=[512, 256, 128, 64],
-            deocder_channels=[256, 128, 64, 64],
+            decoder_channels=[256, 128, 64, 64],
             attention_type=None,
             center=False,
             ):
         super(globalBranch, self).__init__()
         self._up_kwargs = {'mode': 'bilinear'}
         self.encoder_channels = encoder_channels
-        self.deocder_channels = deocder_channels
+        self.decoder_channels = decoder_channels
         self.hidden_channel = 256
         # Top layer
         if center:
             self.toplayer = DAN_Module(self.encoder_channels[0], self.decoder_channels[0])
         else:
-            self.toplayer = nn.Conv2d(self.encoder_channels[0], self.deocder_channels[0], kernel_size=1, stride=1, padding=1)
+            self.toplayer = nn.Conv2d(self.encoder_channels[0], self.decoder_channels[0], kernel_size=1, stride=1, padding=1)
         # Upsample layers
-        self.upsample1 = DecoderBlock(self.decoder_channels[0], self.encoder_channels[1], self.deocder_channels[1], attention_type=attention_type)
-        self.upsample2 = DecoderBlock(self.decoder_channels[1], self.encoder_channels[2], self.deocder_channels[2], attention_type=attention_type)
-        self.upsample3 = DecoderBlock(self.decoder_channels[2], self.encoder_channels[3], self.deocder_channels[3], attention_type=attention_type)
+        self.upsample1 = DecoderBlock(self.decoder_channels[0], self.encoder_channels[1], self.decoder_channels[1], attention_type=attention_type)
+        self.upsample2 = DecoderBlock(self.decoder_channels[1], self.encoder_channels[2], self.decoder_channels[2], attention_type=attention_type)
+        self.upsample3 = DecoderBlock(self.decoder_channels[2], self.encoder_channels[3], self.decoder_channels[3], attention_type=attention_type)
         # Smooth layers
         self.smooth1_1 = nn.Conv2d(self.decoder_channels[0], self.decoder_channels[0], kernel_size=3, stride=1, padding=1)
         self.smooth2_1 = nn.Conv2d(self.decoder_channels[1], self.decoder_channels[1], kernel_size=3, stride=1, padding=1)
@@ -40,7 +40,7 @@ class globalBranch(nn.Module):
         self.smooth3_2 = nn.Conv2d(self.decoder_channels[2], self.decoder_channels[2]//2, kernel_size=3, stride=1, padding=1)
         self.smooth4_2 = nn.Conv2d(self.decoder_channels[3], self.decoder_channels[3]//2, kernel_size=3, stride=1, padding=1)
         # Classify layers
-        self.classifier = nn.Conv2d(sum(self.deocder_channels)//2, n_class, kernel_size=3, stride=1, padding=1)
+        self.classifier = nn.Conv2d(sum(self.decoder_channels)//2, n_class, kernel_size=3, stride=1, padding=1)
 
         # Local2Global: double channels  ***
         # Lateral layers
@@ -57,7 +57,7 @@ class globalBranch(nn.Module):
         self.smooth2_2_ext = nn.Conv2d(self.decoder_channels[1]*2, self.decoder_channels[1]//2, kernel_size=3, stride=1, padding=1)
         self.smooth3_2_ext = nn.Conv2d(self.decoder_channels[2]*2, self.decoder_channels[2]//2, kernel_size=3, stride=1, padding=1)
         self.smooth4_2_ext = nn.Conv2d(self.decoder_channels[3]*2, self.decoder_channels[3]//2, kernel_size=3, stride=1, padding=1)
-        self.smooth = nn.Conv2d(sum(self.deocder_channels), sum(self.deocder_channels)//2, kernel_size=3, stride=3, padding=1)
+        self.smooth = nn.Conv2d(sum(self.decoder_channels), sum(self.decoder_channels)//2, kernel_size=3, stride=3, padding=1)
 
     def _concatenate(self, p5, p4, p3, p2):
         _, _, H, W = p2.size()
@@ -126,27 +126,27 @@ class localBranch(nn.Module):
             self, 
             n_class, 
             encoder_channels=[512, 256, 128, 64],
-            deocder_channels=[256, 128, 64, 64],
+            decoder_channels=[256, 128, 64, 64],
             attention_type=None,
             center=False,
             ):
         super(localBranch, self).__init__()
         self._up_kwargs = {'mode': 'bilinear'}
         self.encoder_channels = encoder_channels
-        self.deocder_channels = deocder_channels
+        self.decoder_channels = decoder_channels
         self.hidden_channel = 256
         fold = 2
         # Top layer
         if center:
             self.toplayer = DAN_Module(self.encoder_channels[0], self.decoder_channels[0])
         else:
-            self.toplayer = nn.Conv2d(self.encoder_channels[0], self.deocder_channels[0], kernel_size=1, stride=1, padding=1)
+            self.toplayer = nn.Conv2d(self.encoder_channels[0], self.decoder_channels[0], kernel_size=1, stride=1, padding=1)
         # Upsample layers
-        self.upsample1 = DecoderBlock(self.decoder_channels[0], self.encoder_channels[1], self.deocder_channels[1], attention_type=attention_type)
-        self.upsample2 = DecoderBlock(self.decoder_channels[1], self.encoder_channels[2], self.deocder_channels[2], attention_type=attention_type)
-        self.upsample3 = DecoderBlock(self.decoder_channels[2], self.encoder_channels[3], self.deocder_channels[3], attention_type=attention_type)
+        self.upsample1 = DecoderBlock(self.decoder_channels[0], self.encoder_channels[1], self.decoder_channels[1], attention_type=attention_type)
+        self.upsample2 = DecoderBlock(self.decoder_channels[1], self.encoder_channels[2], self.decoder_channels[2], attention_type=attention_type)
+        self.upsample3 = DecoderBlock(self.decoder_channels[2], self.encoder_channels[3], self.decoder_channels[3], attention_type=attention_type)
         # Classify layers
-        self.classifier = nn.Conv2d(sum(self.deocder_channels)//2, n_class, kernel_size=3, stride=1, padding=1)
+        self.classifier = nn.Conv2d(sum(self.decoder_channels)//2, n_class, kernel_size=3, stride=1, padding=1)
 
         # Lateral layers
         self.latlayer1 = nn.Conv2d(self.encoder_channels[0]*fold, self.encoder_channels[0], kernel_size=3, stride=1, padding=1)
@@ -162,7 +162,7 @@ class localBranch(nn.Module):
         self.smooth2_2 = nn.Conv2d(self.decoder_channels[1]*fold, self.decoder_channels[1]//2, kernel_size=3, stride=1, padding=1)
         self.smooth3_2 = nn.Conv2d(self.decoder_channels[2]*fold, self.decoder_channels[2]//2, kernel_size=3, stride=1, padding=1)
         self.smooth4_2 = nn.Conv2d(self.decoder_channels[3]*fold, self.decoder_channels[3]//2, kernel_size=3, stride=1, padding=1)
-        self.smooth = nn.Conv2d(sum(self.deocder_channels)//2*fold, sum(self.deocder_channels)//2, kernel_size=3, stride=3, padding=1)
+        self.smooth = nn.Conv2d(sum(self.decoder_channels)//2*fold, sum(self.decoder_channels)//2, kernel_size=3, stride=3, padding=1)
 
     def _concatenate(self, p5, p4, p3, p2):
         _, _, H, W = p2.size()
@@ -235,14 +235,14 @@ class GLNet(nn.Module):
         self.decoder_local = localBranch(
             n_class,
             encoder_channels=self.encoder_channels,
-            deocder_channels=decoder_channels,
+            decoder_channels=decoder_channels,
             attention_type=attention_type,
             center=True,
         )
         self.decoder_global = globalBranch(
             n_class,
             encoder_channels=self.encoder_channels,
-            deocder_channels=decoder_channels,
+            decoder_channels=decoder_channels,
             attention_type=attention_type,
             center=True,
         )

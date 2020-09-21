@@ -1,4 +1,5 @@
 import os
+import sys
 import time
 import random
 import cv2
@@ -15,21 +16,21 @@ from torch.utils.data import DataLoader
 from torchvision.transforms import ToTensor
 import torch.distributed as dist 
 
-from .models.segmentor.GLNet import GLNet
-from .dataset.transformer_seg import TransformerSeg, TransformerSegVal
-from .dataset.dataset_seg import OralDatasetSeg, collate
-from .utils.metrics import AverageMeter
-from .utils.lr_scheduler import LR_Scheduler
-from .utils.seg_loss import FocalLoss, SymmetricCrossEntropyLoss, NormalizedSymmetricCrossEntropyLoss
-from .utils.data import class_to_RGB
-from .helper.helper_unet import Trainer, Evaluator, get_optimizer, create_model_load_weights, save_ckpt_model, update_writer, update_log
-from .helper.config_glnet import Config
+from models.segmentor.GLNet import GLNet
+from dataset.transformer_seg import TransformerSeg, TransformerSegVal, TransformerSegGL, TransformerSegGLVal
+from dataset.dataset_seg import OralDatasetSeg, collate, collateGL
+from utils.metrics import AverageMeter
+from utils.lr_scheduler import LR_Scheduler
+from utils.seg_loss import FocalLoss, SymmetricCrossEntropyLoss, NormalizedSymmetricCrossEntropyLoss
+from utils.data import class_to_RGB
+from helper.helper_glnet import Trainer, Evaluator, get_optimizer, create_model_load_weights, save_ckpt_model, update_writer, update_log
+from helper.config_glnet import Config
 
 
 def argParser():
     parser = argparse.ArgumentParser(description='PyTorch Segmentation')
     parser.add_argument("--local_rank", type=int, default=0)
-    args = parser.parser_args()
+    args = parser.parse_args()
     return args
 
 
@@ -86,7 +87,7 @@ def main(cfg, distributed=True):
     data_time = AverageMeter("DataTime", ':3.3f')
     batch_time = AverageMeter("BatchTime", ':3.3f')
 
-    transformer_train = TransformerSeg
+    transformer_train = TransformerSegGL(crop_size=cfg.size_g)
     dataset_train = OralDatasetSeg(
         trainset_cfg["img_dir"],
         trainset_cfg["mask_dir"],
@@ -96,10 +97,10 @@ def main(cfg, distributed=True):
     )
     if distributed:
         sampler_train = DistributedSampler(dataset_train, shuffle=True)
-        dataloader_train = DataLoader(dataset_train, num_workers=num_workers, batch_size=batch_size, collate_fn=collate, sampler=sampler_train, pin_memory=True)
+        dataloader_train = DataLoader(dataset_train, num_workers=num_workers, batch_size=batch_size, collate_fn=collateGL, sampler=sampler_train, pin_memory=True)
     else:
-        dataloader_train = DataLoader(dataset_train, num_workers=num_workers, batch_size=batch_size, collate_fn=collate, shuffle=True, pin_memory=True)
-    transformer_val = TransformerSegVal
+        dataloader_train = DataLoader(dataset_train, num_workers=num_workers, batch_size=batch_size, collate_fn=collateGL, shuffle=True, pin_memory=True)
+    transformer_val = TransformerSegGLVal()
     dataset_val = OralDatasetSeg(
         valset_cfg["img_dir"],
         valset_cfg["mask_dir"],
@@ -107,7 +108,7 @@ def main(cfg, distributed=True):
         label=valset_cfg["label"], 
         transform=transformer_val
     )
-    dataloader_val = DataLoader(dataset_val, num_workers=num_workers, batch_size=batch_size, collate_fn=collate, shuffle=False, pin_memory=True)
+    dataloader_val = DataLoader(dataset_val, num_workers=num_workers, batch_size=batch_size, collate_fn=collateGL, shuffle=False, pin_memory=True)
 
     ###################################
     print("creating models......")
@@ -122,7 +123,7 @@ def main(cfg, distributed=True):
     model, global_fixed = create_model_load_weights(model, global_fixed, device, mode=mode, local_rank=local_rank, evaluation=False, path_g=path_g, path_g2l=path_g2l, path_l2g=path_l2g)
  
     ###################################
-    num_epochs = cfg.epochs
+    num_epochs = cfg.num_epochs
     learning_rate = cfg.lr
 
     optimizer = get_optimizer(model, mode, learning_rate=learning_rate)
@@ -152,7 +153,7 @@ def main(cfg, distributed=True):
     if local_rank == 0:
         f_log = open(os.path.join(log_path, ".log"), 'w')
         log = task_name + '\n'
-        for k, v in cfg.items():
+        for k, v in cfg.__dict__.items():
             log += str(k) + ' = ' + str(v) + '\n'
         f_log.write(log)
         f_log.flush()
@@ -299,8 +300,8 @@ if torch.cuda.device_count() > 1:
 # seed
 SEED = 233
 seed_everything(SEED)
-cfg = Config(train=True, distributed=distributed)
-main(cfg)
+cfg = Config(train=True)
+main(cfg, distributed=distributed)
 
 
 

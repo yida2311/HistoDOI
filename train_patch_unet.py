@@ -15,22 +15,22 @@ from torch.utils.data import DataLoader
 from torchvision.transforms import ToTensor
 import torch.distributed as dist 
 
-from .segmentor.dynamicUNet import UNet
-from .dataset.transformer_seg import TransformerSeg, TransformerSegVal
-from .dataset.dataset_seg import OralDatasetSeg, collate
-from .utils.metrics import AverageMeter
-from .utils.lr_scheduler import LR_Scheduler
-from .utils.seg_loss import FocalLoss, SymmetricCrossEntropyLoss, NormalizedSymmetricCrossEntropyLoss
-from .utils.data import class_to_RGB
-from .helper.helper_unet import Trainer, Evaluator, save_ckpt_model, update_log, update_writer
-from .helper.utils import get_optimizer, create_model_load_weights
-from .helper.config_unet import Config
+from segmentor.dynamicUNet import UNet
+from dataset.transformer_seg import TransformerSeg, TransformerSegVal
+from dataset.dataset_seg import OralDatasetSeg, collate
+from utils.metrics import AverageMeter
+from utils.lr_scheduler import LR_Scheduler
+from utils.seg_loss import FocalLoss, SymmetricCrossEntropyLoss, NormalizedSymmetricCrossEntropyLoss
+from utils.data import class_to_RGB
+from helper.helper_unet import Trainer, Evaluator, save_ckpt_model, update_log, update_writer
+from helper.utils import get_optimizer, create_model_load_weights
+from helper.config_unet import Config
 
 
 def argParser():
     parser = argparse.ArgumentParser(description='PyTorch Segmentation')
     parser.add_argument("--local_rank", type=int, default=0)
-    args = parser.parser_args()
+    args = parser.parse_args()
     return args
 
 
@@ -82,7 +82,7 @@ def main(cfg, distributed=False):
     data_time = AverageMeter("DataTime", ':3.3f')
     batch_time = AverageMeter("BatchTime", ':3.3f')
 
-    transformer_train = TransformerSeg
+    transformer_train = TransformerSeg()
     dataset_train = OralDatasetSeg(
         trainset_cfg["img_dir"],
         trainset_cfg["mask_dir"],
@@ -95,7 +95,7 @@ def main(cfg, distributed=False):
         dataloader_train = DataLoader(dataset_train, num_workers=num_workers, batch_size=batch_size, collate_fn=collate, sampler=sampler_train, pin_memory=True)
     else:
         dataloader_train = DataLoader(dataset_train, num_workers=num_workers, batch_size=batch_size, collate_fn=collate, shuffle=True, pin_memory=True)
-    transformer_val = TransformerSegVal
+    transformer_val = TransformerSegVal()
     dataset_val = OralDatasetSeg(
         valset_cfg["img_dir"],
         valset_cfg["mask_dir"],
@@ -111,7 +111,7 @@ def main(cfg, distributed=False):
     model = create_model_load_weights(model, device, distributed=distributed, local_rank=local_rank, evaluation=True, ckpt_path=cfg.ckpt_path)
  
     ###################################
-    num_epochs = cfg.epochs
+    num_epochs = cfg.num_epochs
     learning_rate = cfg.lr
 
     optimizer = get_optimizer(model, learning_rate=learning_rate)
@@ -242,8 +242,8 @@ if torch.cuda.device_count() > 1:
 # seed
 SEED = 233
 seed_everything(SEED)
-cfg = Config(train=True, distributed=distributed)
-main(cfg)
+cfg = Config(train=True)
+main(cfg, distributed=distributed)
 
 
 
