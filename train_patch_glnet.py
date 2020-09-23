@@ -87,7 +87,7 @@ def main(cfg, distributed=True):
     data_time = AverageMeter("DataTime", ':3.3f')
     batch_time = AverageMeter("BatchTime", ':3.3f')
 
-    transformer_train = TransformerSegGL(crop_size=cfg.size_g)
+    transformer_train = TransformerSegGL(crop_size=cfg.crop_size)
     dataset_train = OralDatasetSeg(
         trainset_cfg["img_dir"],
         trainset_cfg["mask_dir"],
@@ -108,7 +108,7 @@ def main(cfg, distributed=True):
         label=valset_cfg["label"], 
         transform=transformer_val
     )
-    dataloader_val = DataLoader(dataset_val, num_workers=num_workers, batch_size=batch_size, collate_fn=collateGL, shuffle=False, pin_memory=True)
+    dataloader_val = DataLoader(dataset_val, num_workers=2, batch_size=batch_size, collate_fn=collateGL, shuffle=False, pin_memory=True)
 
     ###################################
     print("creating models......")
@@ -120,7 +120,7 @@ def main(cfg, distributed=True):
         global_fixed = GLNet(n_class, cfg.encoder, **cfg.model_cfg)
     else:
         global_fixed = None
-    model, global_fixed = create_model_load_weights(model, global_fixed, device, mode=mode, local_rank=local_rank, evaluation=False, path_g=path_g, path_g2l=path_g2l, path_l2g=path_l2g)
+    model, global_fixed = create_model_load_weights(model, global_fixed, device, mode=mode, distributed=distributed, local_rank=local_rank, evaluation=False, path_g=path_g, path_g2l=path_g2l, path_l2g=path_l2g)
  
     ###################################
     num_epochs = cfg.num_epochs
@@ -190,7 +190,7 @@ def main(cfg, distributed=True):
                 else:
                     tbar.set_description('Train loss: %.4f;agg mIoU: %.4f; global mIoU: %.4f; local mIoU: %.4f; data time: %.2f; batch time: %.2f' % 
                                 (train_loss / (i_batch + 1), score_train["iou_mean"], score_train_global["iouu_mean"], score_train_local["iou_mean"], data_time.avg, batch_time.avg))
-
+            
         score_train, score_train_global, score_train_local = trainer.get_scores()        
         trainer.reset_metrics()
         data_time.reset()
@@ -205,7 +205,7 @@ def main(cfg, distributed=True):
                 start_time = time.time()
                 for i_batch, sample in enumerate(tbar):
                     data_time.update(time.time()-start_time)
-                    predictions, predictions_global, predictions_local = evaluator.eval(sample, model, global_fixed)
+                    predictions, predictions_global, predictions_local = evaluator.eval_test(sample, model, global_fixed)
                     score_val, score_val_global, score_val_local = evaluator.get_scores()
                     
                     batch_time.update(time.time()-start_time)
@@ -222,7 +222,7 @@ def main(cfg, distributed=True):
 
                     
                     if val_vis and i_batch == len(tbar)//2: # val set result visualize
-                            mask_rgb = class_to_RGB(sample['mask'][1].numpy())
+                            mask_rgb = class_to_RGB(np.array(sample['mask'][1]))
                             mask_rgb = ToTensor()(mask_rgb)
                             writer_info.update(mask=mask_rgb, prediction_global=ToTensor()(class_to_RGB(predictions_global[1])))
                             if mode == 2 or mode == 3:
@@ -242,7 +242,7 @@ def main(cfg, distributed=True):
                 # writer
                 if mode == 1:
                     writer_info.update(
-                        loss=trainset_cfg/len(tbar),
+                        loss=train_loss/len(tbar),
                         lr=optimizer.param_groups[0]['lr'],
                         mIOU={
                             "train": score_train_global["iou_mean"],
@@ -263,7 +263,7 @@ def main(cfg, distributed=True):
                     )
                 else:
                     writer_info.update(
-                        loss=trainset_cfg/len(tbar),
+                        loss=train_loss/len(tbar),
                         lr=optimizer.param_groups[0]['lr'],
                         mIOU={
                             "train": score_train["iou_mean"],

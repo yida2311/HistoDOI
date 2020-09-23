@@ -53,11 +53,11 @@ class globalBranch(nn.Module):
         self.smooth2_1_ext = nn.Conv2d(self.decoder_channels[1]*2, self.decoder_channels[1], kernel_size=3, stride=1, padding=1)
         self.smooth3_1_ext = nn.Conv2d(self.decoder_channels[2]*2, self.decoder_channels[2], kernel_size=3, stride=1, padding=1)
         self.smooth4_1_ext = nn.Conv2d(self.decoder_channels[3]*2, self.decoder_channels[3], kernel_size=3, stride=1, padding=1)
-        self.smooth1_2_ext = nn.Conv2d(self.decoder_channels[0]*2, self.decoder_channels[0]//2, kernel_size=3, stride=1, padding=1)
-        self.smooth2_2_ext = nn.Conv2d(self.decoder_channels[1]*2, self.decoder_channels[1]//2, kernel_size=3, stride=1, padding=1)
-        self.smooth3_2_ext = nn.Conv2d(self.decoder_channels[2]*2, self.decoder_channels[2]//2, kernel_size=3, stride=1, padding=1)
-        self.smooth4_2_ext = nn.Conv2d(self.decoder_channels[3]*2, self.decoder_channels[3]//2, kernel_size=3, stride=1, padding=1)
-        self.smooth = nn.Conv2d(sum(self.decoder_channels), sum(self.decoder_channels)//2, kernel_size=3, stride=3, padding=1)
+        self.smooth1_2_ext = nn.Conv2d(self.decoder_channels[0]*2, self.decoder_channels[0], kernel_size=3, stride=1, padding=1)
+        self.smooth2_2_ext = nn.Conv2d(self.decoder_channels[1]*2, self.decoder_channels[1], kernel_size=3, stride=1, padding=1)
+        self.smooth3_2_ext = nn.Conv2d(self.decoder_channels[2]*2, self.decoder_channels[2], kernel_size=3, stride=1, padding=1)
+        self.smooth4_2_ext = nn.Conv2d(self.decoder_channels[3]*2, self.decoder_channels[3], kernel_size=3, stride=1, padding=1)
+        self.smooth = nn.Conv2d(sum(self.decoder_channels)//2, sum(self.decoder_channels), kernel_size=3, stride=3, padding=1)
 
     def _concatenate(self, p5, p4, p3, p2):
         _, _, H, W = p2.size()
@@ -158,11 +158,11 @@ class localBranch(nn.Module):
         self.smooth2_1 = nn.Conv2d(self.decoder_channels[1]*fold, self.decoder_channels[1], kernel_size=3, stride=1, padding=1)
         self.smooth3_1 = nn.Conv2d(self.decoder_channels[2]*fold, self.decoder_channels[2], kernel_size=3, stride=1, padding=1)
         self.smooth4_1 = nn.Conv2d(self.decoder_channels[3]*fold, self.decoder_channels[3], kernel_size=3, stride=1, padding=1)
-        self.smooth1_2 = nn.Conv2d(self.decoder_channels[0]*fold, self.decoder_channels[0]//2, kernel_size=3, stride=1, padding=1)
-        self.smooth2_2 = nn.Conv2d(self.decoder_channels[1]*fold, self.decoder_channels[1]//2, kernel_size=3, stride=1, padding=1)
-        self.smooth3_2 = nn.Conv2d(self.decoder_channels[2]*fold, self.decoder_channels[2]//2, kernel_size=3, stride=1, padding=1)
-        self.smooth4_2 = nn.Conv2d(self.decoder_channels[3]*fold, self.decoder_channels[3]//2, kernel_size=3, stride=1, padding=1)
-        self.smooth = nn.Conv2d(sum(self.decoder_channels)//2*fold, sum(self.decoder_channels)//2, kernel_size=3, stride=3, padding=1)
+        self.smooth1_2 = nn.Conv2d(self.decoder_channels[0]*fold, self.decoder_channels[0], kernel_size=3, stride=1, padding=1)
+        self.smooth2_2 = nn.Conv2d(self.decoder_channels[1]*fold, self.decoder_channels[1], kernel_size=3, stride=1, padding=1)
+        self.smooth3_2 = nn.Conv2d(self.decoder_channels[2]*fold, self.decoder_channels[2], kernel_size=3, stride=1, padding=1)
+        self.smooth4_2 = nn.Conv2d(self.decoder_channels[3]*fold, self.decoder_channels[3], kernel_size=3, stride=1, padding=1)
+        self.smooth = nn.Conv2d(sum(self.decoder_channels), sum(self.decoder_channels)//2, kernel_size=3, stride=3, padding=1)
 
     def _concatenate(self, p5, p4, p3, p2):
         _, _, H, W = p2.size()
@@ -418,7 +418,7 @@ class GLNet(nn.Module):
         if mode == 1:
             # train global model
             feat_g = self.encoder_global.forward(image_global)
-            output_g, ps0_g, ps1_g, ps2_g, ps3_g = self.fpn_global.forward(feat_g)
+            output_g, ps0_g, ps1_g, ps2_g, ps3_g = self.decoder_global.forward(feat_g)
             # imsize = image_global.size()[2:]
             # output_g = F.interpolate(output_g, imsize, mode='nearest')
             return output_g, None
@@ -428,7 +428,7 @@ class GLNet(nn.Module):
                 if self.patch_n == 0:
                     # calculate global images only if patches belong to a new set of global images (when self.patch_n % n_patch == 0)
                     self.feat_g = self.encoder_global.forward(image_global)
-                    self.output_g, self.ps0_g, self.ps1_g, self.ps2_g, self.ps3_g = self.fpn_global.forward(self.feat_g)
+                    self.output_g, self.ps0_g, self.ps1_g, self.ps2_g, self.ps3_g = self.decoder_global.forward(self.feat_g)
                     # imsize_glb = image_global.size()[2:]
                     # self.output_g = F.interpolate(self.output_g, imsize_glb, mode='nearest')
                 self.patch_n += patches.size()[0]
@@ -437,7 +437,7 @@ class GLNet(nn.Module):
             # train local model #######################################
             feat_l = self.encoder_local.forward(patches)
             # global's 1x patch cat
-            output_l, ps0_l, ps1_l, ps2_l, ps3_l = self.fpn_local.forward(
+            output_l, ps0_l, ps1_l, ps2_l, ps3_l = self.decoder_local.forward(
                 feat_l,
                 feat_ext=[ self._crop_global(self.f, top_lefts, ratio) for f in self.feat_g ],
                 ps0_ext=[ self._crop_global(f, top_lefts, ratio) for f in self.ps0_g ],

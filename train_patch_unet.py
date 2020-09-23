@@ -214,7 +214,7 @@ def main(cfg, distributed=False):
                 update_log(f_log, cfg, scores_train, scores_val, epoch)   
                 # writer
                 writer_info.update(
-                    loss=trainset_cfg/len(tbar),
+                    loss=train_loss/len(tbar),
                     lr=optimizer.param_groups[0]['lr'],
                     mIOU={
                         "train": scores_train["iou_mean"],

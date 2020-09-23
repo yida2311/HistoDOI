@@ -148,16 +148,19 @@ def one_hot_gaussian_blur(index, classes):
     return mask
 
 
-def create_model_load_weights(model, global_fixed, device, mode=1, local_rank=0, evaluation=False, path_g=None, path_g2l=None, path_l2g=None):
+def create_model_load_weights(model, global_fixed, device, mode=1, distributed=False, local_rank=0, evaluation=False, path_g=None, path_g2l=None, path_l2g=None):
     # to cuda and dirstributed
-    model = nn.SyncBatchNorm.convert_sync_batchnorm(model)
-    model.to(device)
-    model = nn.parallel.DistributedDataParallel(model, device_ids=[local_rank], output_device=local_rank, find_unused_parameters=True)
-    if global_fixed:
-        global_fixed = nn.SyncBatchNorm.convert_sync_batchnorm(global_fixed)
-        global_fixed.to(device)
-        global_fixed = nn.parallel.DistributedDataParallel(global_fixed, device_ids=[local_rank], output_device=local_rank, find_unused_parameters=True)
-  
+    if distributed:
+        model = nn.SyncBatchNorm.convert_sync_batchnorm(model)
+        model.to(device)
+        model = nn.parallel.DistributedDataParallel(model, device_ids=[local_rank], output_device=local_rank, find_unused_parameters=True)
+        if global_fixed:
+            global_fixed = nn.SyncBatchNorm.convert_sync_batchnorm(global_fixed)
+            global_fixed.to(device)
+            global_fixed = nn.parallel.DistributedDataParallel(global_fixed, device_ids=[local_rank], output_device=local_rank, find_unused_parameters=True)
+    else:
+        model.to(device)
+        model = nn.DataParallel(model)
     # load checkpoint
     if (mode == 2 and not evaluation) or (mode == 1 and evaluation):
         # load fixed basic global branch
@@ -531,11 +534,11 @@ def save_ckpt_model(model, cfg, score, score_global, best_pred, epoch):
     if cfg.mode == 1:
         if score_global["iou_mean"] >  best_pred:
             best_pred = score_global["iou_mean"]
-            save_path = os.path.join(cfg.model_path, "%s-%d-%.5f.pth"%(cfg.model+'-'+cfg.backbone + '-' + cfg.mode_str[cfg.mode], epoch, best_pred))
+            save_path = os.path.join(cfg.model_path, "%s-%d-%.5f.pth"%(cfg.model+'-'+cfg.encoder + '-' + cfg.mode_str[cfg.mode], epoch, best_pred))
     else:
         if score['iou_mean'] > best_pred:
             best_pred = score['iou_mean']
-            save_path = os.path.join(cfg.model_path, "%s-%d-%.5f.pth"%(cfg.model+'-'+cfg.backbone + '-' + cfg.mode_str[cfg.mode], epoch, best_pred))
+            save_path = os.path.join(cfg.model_path, "%s-%d-%.5f.pth"%(cfg.model+'-'+cfg.encoder + '-' + cfg.mode_str[cfg.mode], epoch, best_pred))
             torch.save(model.state_dict(), save_path)
     
     return best_pred
@@ -607,6 +610,8 @@ def update_writer(writer, writer_info, epoch):
     for k, v in writer_info.items():
         if isinstance(v, dict):
             writer.add_scalars(k, v, epoch)
+        elif isinstance(v, torch.Tensor):
+            writer.add_image(k, v, epoch)
         else:
             writer.add_scalar(k, v, epoch)
 

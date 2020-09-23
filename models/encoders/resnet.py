@@ -60,7 +60,7 @@ class ResNetEncoder(ResNet, EncoderMixin):
             x = stages[i](x)
             features.append(x)
 
-        return features
+        return features[::-1]
 
     def load_state_dict(self, state_dict, **kwargs):
         state_dict.pop("fc.bias")
