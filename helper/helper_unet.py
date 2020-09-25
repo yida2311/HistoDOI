@@ -6,7 +6,6 @@ import numpy as np
 import torch
 import torch.nn.functional as F
 from PIL import Image
-from torchvision.transforms.functional import resize
 
 from .utils import Parallel2Single, ConfusionMatrixSeg, AverageMeter, class_to_RGB, collate
 
@@ -71,9 +70,8 @@ class Trainer(object):
         imgs = imgs.cuda()
         masks_npy = np.array(masks)
         masks = masks.cuda()
-
         preds = model.forward(imgs)
-        preds = resize(preds, size=(masks.size(2), masks.size(3)))
+        preds = F.interpolate(preds, size=(masks.size(1), masks.size(2)), mode='bilinear')
         loss = self.criterion(preds, masks)
         loss.backward()
         self.optimizer.step()
@@ -94,7 +92,7 @@ class Trainer(object):
         masks = masks.cuda()
 
         preds = model.forward(imgs)
-        preds = resize(preds, size=(masks.size(2), masks.size(3)))
+        preds = F.interpolate(preds, size=(masks.size(1), masks.size(2)), mode='bilinear')
         loss = self.criterion(preds, masks) / acc_step
         loss.backward()
 
@@ -118,7 +116,7 @@ class Trainer(object):
         masks = masks.cuda()
 
         preds = model.forward(imgs)
-        preds = resize(preds, size=(masks.size(2), masks.size(3)))
+        preds = F.interpolate(preds, size=(masks.size(1), masks.size(2)), mode='bilinear')
         # Online self correction cycle with label refinement
         if cycle_n >= 1:
             with torch.no_grad():
@@ -159,7 +157,7 @@ class Evaluator(object):
             masks_npy = np.array(masks)
 
             preds = model.forward(imgs)
-            preds = resize(preds, size=(masks.size(2), masks.size(3)))
+            preds = F.interpolate(preds, size=(masks.size(1), masks.size(2)), mode='bilinear')
             outputs = preds.cpu().detach().numpy()
             predictions = np.argmax(outputs, axis=1)
 
@@ -172,7 +170,7 @@ class Evaluator(object):
         with torch.no_grad():
             imgs = imgs.cuda()
             preds = model.forward(imgs)
-            preds = resize(preds, size=(imgs.size(2), imgs.size(3)))
+            preds = F.interpolate(preds, size=(imgs.size(2), imgs.size(3)), mode='bilinear')
             outputs = preds.cpu().detach().numpy()
             predictions = np.argmax(outputs, axis=1)
         
@@ -209,7 +207,7 @@ class SlideInference(object):
             with torch.no_grad():
                 imgs = imgs.cuda()
                 preds = model.forward(imgs)
-                preds = resize(preds, size=(imgs.size(2), imgs.size(3)))
+                preds = F.interpolate(preds, size=(imgs.size(2), imgs.size(3)), mode='bilinear')
                 preds_np = preds.cpu().detach().numpy()
             _, _, h, w = preds_np.shape
 
