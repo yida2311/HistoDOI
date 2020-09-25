@@ -98,10 +98,10 @@ class ConfusionMatrixSeg(object):
         intersect = np.diag(hist)
         union = hist.sum(axis=1) + hist.sum(axis=0) - np.diag(hist)
         iou = intersect / union
-        mean_iou = np.mean(np.nan_to_num(iou[1:]))
+        mean_iou = np.mean(np.nan_to_num(iou))
         
         dice = 2 * intersect / (hist.sum(axis=1) + hist.sum(axis=0))
-        mean_dice = np.mean(np.nan_to_num(dice[1:]))
+        mean_dice = np.mean(np.nan_to_num(dice))
 
         freq = hist.sum(axis=1) / hist.sum() # freq of each target
         # fwavacc = (freq[freq > 0] * iou[freq > 0]).sum()

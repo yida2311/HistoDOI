@@ -179,7 +179,7 @@ class UnetDecoder(nn.Module):
         # computing blocks input and output channels
         head_channels = encoder_channels[0]
         in_channels = [head_channels] + list(decoder_channels[:-1])
-        skip_channels = list(encoder_channels[1:]) + [0]
+        skip_channels = list(encoder_channels[1:])
         out_channels = decoder_channels
 
         if center:
@@ -198,8 +198,8 @@ class UnetDecoder(nn.Module):
         ]
         self.blocks = nn.ModuleList(blocks)
 
-    def forward(self, *features):
-        features = features[::-1]  # reverse channels to start from head of encoder
+    def forward(self, *features): 
+        # features: [c5, c4, c3, c2, c1]
         head = features[0] # x32
         skips = features[1:] # [x16, x8, x4, x2]
 
@@ -208,4 +208,4 @@ class UnetDecoder(nn.Module):
             skip = skips[i] if i < len(skips) else None
             x = decoder_block(x, skip)
 
-        return x
+        return x   # x2

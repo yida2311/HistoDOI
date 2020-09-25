@@ -162,7 +162,10 @@ def main(cfg, distributed=False):
             data_time.update(time.time()-start_time)
             scheduler(optimizer, i_batch, epoch, best_pred)
             # loss = trainer.train(sample, model)
-            loss = trainer.train_acc(sample, model, i_batch, 4, num_batch)
+            if distributed:
+                loss = trainer.train(sample, model)
+            else:
+                loss = trainer.train_acc(sample, model, i_batch, 4, num_batch)
             train_loss += loss.item()
             scores_train = trainer.get_scores()
 
