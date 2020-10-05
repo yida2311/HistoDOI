@@ -3,13 +3,73 @@ import torch.nn.functional as F
 import torch
 from .lovasz_loss import LovaszSoftmax
 
-__all__ = ['CriterionAll', 'CrossEntropyLoss', 'FocalLoss', 'SoftCrossEntropyLoss2d']
+__all__ = ['SchpLoss', 'CrossEntropyLoss', 'SymmetricCrossEntropyLoss', 
+            'NormalizedSymmetricCrossEntropyLoss', 'FocalLoss', 'SoftCrossEntropyLoss2d']
 
 
-class CriterionAll(nn.Module):
+class DecoupledSegLoss_v1(nn.Module):
+    """Decoupled Segmentation loss 
+        clean set: CrossEntropy, noisy set: SymmetricCrossEntropy
+    """
+    def __init__(self, num_classes=4, alpha=1, beta=1, ignore_index=-1):
+        self.clean_loss = CrossEntropyLoss(ignore_index=ignore_index)
+        self.noisy_loss = SymmetricCrossEntropyLoss(alpha=alpha, beta=beta, num_classes=num_classes, ignore_index=ignore_index)
+        self.ignore_index = ignore_index
+    
+    def forward(self, inputs, targets):
+        clean_targets, noisy_targets = self.decoupleTargets(targets)
+        loss_clean = self.clean_loss(inputs, clean_targets)
+        loss_noisy = self.noisy_loss(inputs, noisy_targets)
+        return loss_clean + loss_noisy
+        
+    def decoupleTargets(self, targets):
+        clean_mask = (targets==0) or (targets==1)
+        noisy_mask = (targets==2) or (targets==3)
+        clean_targets = targets
+        clean_targets[noisy_mask] = self.ignore_index
+        noisy_targets = targets
+        noisy_targets[clean_mask] = self.ignore_index
+
+        return clean_targets, noisy_targets
+
+
+class DecoupledSegLoss_v2(nn.Module):
+    """Decoupled Segmentation loss 
+        clean set: Focal, noisy set: SymmetricCrossEntropy
+    """
+    def __init__(self, num_classes=4, alpha=1, beta=1, gamma=1, ignore_index=-1):
+        self.clean_loss = FocalLoss(gamma=gamma, ignore=ignore_index)
+        self.noisy_loss = SymmetricCrossEntropyLoss(alpha=alpha, beta=beta, num_classes=num_classes, ignore_index=ignore_index)
+        self.ignore_index = ignore_index
+    
+    def forward(self, inputs, targets):
+        clean_targets, noisy_targets = self.decoupleTargets(targets)
+        loss_clean = self.clean_loss(inputs, clean_targets)
+        loss_noisy = self.noisy_loss(inputs, noisy_targets)
+        return loss_clean + loss_noisy
+        
+    def decoupleTargets(self, targets):
+        clean_mask = (targets==0) or (targets==1)
+        noisy_mask = (targets==2) or (targets==3)
+        clean_targets = targets
+        clean_targets[noisy_mask] = self.ignore_index
+        noisy_targets = targets
+        noisy_targets[clean_mask] = self.ignore_index
+
+        return clean_targets, noisy_targets
+
+
+
+
+
+
+
+
+#======================= SCHP Loss ======================================
+class SchpLoss(nn.Module):
     """ For self-correction human parsing"""
     def __init__(self, use_class_weight=False, lamda=1, num_classes=4):
-        super(CriterionAll, self).__init__()
+        super(SchpLoss, self).__init__()
         self.use_class_weight = use_class_weight
         self.criterion = nn.CrossEntropyLoss()
         self.lovasz = LovaszSoftmax()
@@ -76,6 +136,7 @@ class KLDivergenceLoss(nn.Module):
         return self.T*self.T*loss # balanced
 
 
+#================== Symmetric Cross Entropy Loss =========================
 class SymmetricCrossEntropyLoss(nn.Module):
     def __init__(self, alpha, beta, num_classes=4, ignore_index=-100):
         super(SymmetricCrossEntropyLoss, self).__init__()
@@ -91,21 +152,6 @@ class SymmetricCrossEntropyLoss(nn.Module):
         loss = self.alpha * ce + self.beta * rce 
         return loss
 
-
-class NormalizedSymmetricCrossEntropyLoss(nn.Module):
-    def __init__(self, alpha, beta, num_classes=4, ignore_index=-100):
-        super(NormalizedSymmetricCrossEntropyLoss, self).__init__()
-        self.alpha = alpha
-        self.beta = beta
-        self.nce_loss = NormalizedCrossEntropyLoss(num_classes=num_classes)
-        self.nrce_loss = NormalizedReverseCrossEntropyLoss(num_classes=num_classes)
-
-    def forward(self, inputs, targets):
-        nce = self.nce_loss(inputs, targets)
-        nrce = self.nrce_loss(inputs, targets)
-        
-        loss = self.alpha * nce + self.beta * nrce 
-        return loss
 
 class CrossEntropyLoss(nn.Module):
     def __init__(self, ignore_index=-100):
@@ -131,6 +177,23 @@ class ReverseCrossEntropyLoss(nn.Module):
         loss = -1 * torch.sum(pred * torch.log(targets_one_hot), dim=1)
 
         return loss.mean()
+
+
+#===================== Normalized Symmetric Cross Entropy Loss =====================
+class NormalizedSymmetricCrossEntropyLoss(nn.Module):
+    def __init__(self, alpha, beta, num_classes=4, ignore_index=-100):
+        super(NormalizedSymmetricCrossEntropyLoss, self).__init__()
+        self.alpha = alpha
+        self.beta = beta
+        self.nce_loss = NormalizedCrossEntropyLoss(num_classes=num_classes)
+        self.nrce_loss = NormalizedReverseCrossEntropyLoss(num_classes=num_classes)
+
+    def forward(self, inputs, targets):
+        nce = self.nce_loss(inputs, targets)
+        nrce = self.nrce_loss(inputs, targets)
+        
+        loss = self.alpha * nce + self.beta * nrce 
+        return loss
 
 
 class NormalizedCrossEntropyLoss(nn.Module):
@@ -165,6 +228,7 @@ class NormalizedReverseCrossEntropyLoss(nn.Module):
         return nrce.mean()
 
 
+#======================================= Focal Loss ======================================
 class FocalLoss(nn.Module):
 
     def __init__(self, gamma=0, eps=1e-7, size_average=True, one_hot=True, ignore=None):
@@ -202,6 +266,7 @@ class FocalLoss(nn.Module):
         return loss
 
 
+#=============== Soft Cross Entropy Loss ========================
 class SoftCrossEntropyLoss2d(nn.Module):
     def __init__(self):
         super(SoftCrossEntropyLoss2d, self).__init__()

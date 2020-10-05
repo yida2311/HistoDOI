@@ -15,7 +15,7 @@ from torch.utils.data import DataLoader
 from torchvision.transforms import ToTensor
 import torch.distributed as dist 
 
-from segmentor.dynamicUNet import UNet
+from models.segmentor.dynamicUNet import Unet
 from dataset.transformer_seg import TransformerSeg, TransformerSegVal
 from dataset.dataset_seg import OralDatasetSeg, collate
 from utils.metrics import AverageMeter
@@ -107,7 +107,7 @@ def main(cfg, distributed=False):
 
     ###################################
     print("creating models......")
-    model = UNet(cfg.n_class, encoder_name=cfg.encoder, **cfg.model_cfg)
+    model = Unet(classes=cfg.n_class, encoder_name=cfg.encoder, **cfg.model_cfg)
     model = create_model_load_weights(model, device, distributed=distributed, local_rank=local_rank, evaluation=True, ckpt_path=cfg.ckpt_path)
  
     ###################################
@@ -141,7 +141,7 @@ def main(cfg, distributed=False):
     if local_rank == 0:
         f_log = open(os.path.join(log_path, ".log"), 'w')
         log = task_name + '\n'
-        for k, v in cfg.items():
+        for k, v in cfg.__dict__.items():
             log += str(k) + ' = ' + str(v) + '\n'
         f_log.write(log)
         f_log.flush()

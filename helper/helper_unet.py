@@ -13,7 +13,7 @@ from .utils import Parallel2Single, ConfusionMatrixSeg, AverageMeter, class_to_R
 def save_ckpt_model(model, cfg, scores, best_pred, epoch):
     if scores['iou_mean'] > best_pred:
         best_pred = scores['iou_mean']
-        save_path = os.path.join(cfg.model_path, "%s-%d-%.5f.pth"%(cfg.model+'-'+cfg.backbone, epoch, best_pred))
+        save_path = os.path.join(cfg.model_path, "%s-%d-%.5f.pth"%(cfg.model+'-'+cfg.encoder, epoch, best_pred))
         torch.save(model.state_dict(), save_path)
     
     return best_pred
