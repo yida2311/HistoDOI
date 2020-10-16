@@ -59,12 +59,6 @@ class DecoupledSegLoss_v2(nn.Module):
         return clean_targets, noisy_targets
 
 
-
-
-
-
-
-
 #======================= SCHP Loss ======================================
 class SchpLoss(nn.Module):
     """ For self-correction human parsing"""

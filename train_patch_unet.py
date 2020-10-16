@@ -20,7 +20,7 @@ from dataset.transformer_seg import TransformerSeg, TransformerSegVal
 from dataset.dataset_seg import OralDatasetSeg, collate
 from utils.metrics import AverageMeter
 from utils.lr_scheduler import LR_Scheduler
-from utils.seg_loss import FocalLoss, SymmetricCrossEntropyLoss, NormalizedSymmetricCrossEntropyLoss
+from utils.seg_loss import FocalLoss, SymmetricCrossEntropyLoss, DecoupledSegLoss_v1, DecoupledSegLoss_v2
 from utils.data import class_to_RGB
 from helper.helper_unet import Trainer, Evaluator, save_ckpt_model, update_log, update_writer
 from helper.utils import get_optimizer, create_model_load_weights
@@ -120,13 +120,17 @@ def main(cfg, distributed=False):
     if cfg.loss == "ce":
         criterion = nn.CrossEntropyLoss(reduction='mean')
     elif cfg.loss == "sce":
-        criterion = SymmetricCrossEntropyLoss(alpha=cfg.alpha, beta=cfg.beta, num_classes=cfg.n_class)
+        criterion = SymmetricCrossEntropyLoss(alpha=cfg.loss_cfg['sce']['alpha'], beta=cfg.loss_cfg['sce']['beta'], num_classes=cfg.n_class)
         # criterion4 = NormalizedSymmetricCrossEntropyLoss(alpha=cfg.alpha, beta=cfg.beta, num_classes=cfg.n_class)
     elif cfg.loss == "focal":
-        criterion = FocalLoss(gamma=3)
+        criterion = FocalLoss(gamma=cfg.loss_cfg['focal']['gamma'])
     elif cfg.loss == "ce-dice":
         criterion = nn.CrossEntropyLoss(reduction='mean')
         # criterion2 = 
+    elif cfg.loss == 'decouple-v1':
+        criterion = DecoupledSegLoss_v1(alpha=cfg.loss_cfg['sce']['alpha'], beta=cfg.loss_cfg['sce']['beta'], num_classes=cfg.n_class)
+    elif cfg.loss == 'decouple-v2':
+        criterion = DecoupledSegLoss_v2(alpha=cfg.loss_cfg['sce']['alpha'], beta=cfg.loss_cfg['sce']['beta'], gamma=cfg.loss_cfg['focal']['gamma'], num_classes=cfg.n_class)
     
     #######################################
     trainer = Trainer(criterion, optimizer, n_class)
@@ -139,10 +143,11 @@ def main(cfg, distributed=False):
 
     # log
     if local_rank == 0:
-        f_log = open(os.path.join(log_path, ".log"), 'w')
+        f_log = open(log_path + ".log", 'w')
         log = task_name + '\n'
         for k, v in cfg.__dict__.items():
             log += str(k) + ' = ' + str(v) + '\n'
+        print(log)
         f_log.write(log)
         f_log.flush()
     # writer
