@@ -4,7 +4,7 @@ import torch
 import cv2
 from tqdm import tqdm
 
-from segmentor.dynamicUNet import UNet
+from models.segmentor.dynamicUNet import Unet
 from dataset.transformer_seg import TransformerSegVal
 from dataset.dataset_seg import OralSlideSeg, collate
 from utils.metrics import AverageMeter
@@ -39,14 +39,14 @@ def main(cfg, slide_list):
         slide_list, 
         slideset_cfg["img_dir"], 
         slideset_cfg["meta_file"], 
-        mask_dir=slideset_cfg["mask_dir"], 
+        slide_mask_dir=slideset_cfg["mask_dir"], 
         label=slideset_cfg['label'], 
-        transform=transformer
+        transform=transformer,
     )
 
     ###################################
     print("creating models......")
-    model = UNet(cfg.n_class, encoder_name=cfg.encoder, **cfg.model_cfg)
+    model = Unet(classes=cfg.n_class, encoder_name=cfg.encoder, **cfg.model_cfg)
     # model = create_model_load_weights_v2(model, evaluation=True, ckpt_path=ckpt_path)
     model = create_model_load_weights(model, evaluation=True, ckpt_path=cfg.ckpt_path)
     model.cuda()

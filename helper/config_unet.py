@@ -4,34 +4,36 @@ class Config:
     def __init__(self, train=True):
         # model config
         self.model = "unet"
-        self.encoder = "resnet18"  
+        self.encoder = "resnet34"  
         self.n_class = 4
         self.model_cfg = {
             'encoder_depth': 5,
             'encoder_weights': 'imagenet',
             'decoder_use_batchnorm': True,
-            'decoder_channels': (512, 256, 128, 64, 64),
+            'decoder_channels': (512, 256, 128, 64),
             'decoder_attention_type': 'scse',
             'in_channels': 3,
         }
 
         # data config
+        # root = '/remote-home/my/OSCC-Tile-v2/'
+        root = '/media/ldy/7E1CA94545711AE6/OSCC_test/5x_1600/'
         self.trainset_cfg = {
-            "img_dir": "",
-            "mask_dir": "",
-            "meta_file": "",
+            "img_dir": root + "/5x_1600/train/",
+            "mask_dir": root + "/5x_1600/train_mask/",
+            "meta_file": root + "/5x_1600/train_1600.csv",
             "label": True,
         }
         self.valset_cfg = {
-            "img_dir": "",
-            "mask_dir": "",
-            "meta_file": "",
+            "img_dir": root + "train_1600/",
+            "mask_dir": root + "train_mask_1600/",
+            "meta_file": root + "/5x_1600/val_1600.csv",
             "label": True,
         }
         self.slideset_cfg = {  # for slide level inference
-            "img_dir": "",
-            "meta_file": "",
-            "mask_dir": "",
+            "img_dir": root + "train_1600/",
+            "meta_file": root + "tile_info_train_1024.json",
+            "mask_dir": root + "train_mask_1600/",
             "label": True,
         }
 
@@ -40,7 +42,7 @@ class Config:
         self.lr = 1e-4
         self.num_epochs = 150
         self.warmup_epochs = 2
-        self.batch_size = 8
+        self.batch_size = 2
         self.ckpt_path = "" # pretrained model
         self.num_workers = 4
         self.evaluation = True  # evaluatie val set

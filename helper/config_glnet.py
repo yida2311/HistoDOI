@@ -9,30 +9,31 @@ class Config:
         self.n_class = 4
         self.mode = 1 # 1:g 2:g2l 3:l2g
         self.model_cfg = {
-            'decoder_channels': (512, 256, 128, 64, 64),
+            'decoder_channels': (512, 256, 128, 64),
             'attention_type': 'scse',
         }
-        self.size_g = 4000
+        self.crop_size = 4000
+        self.size_g = 832
         self.size_p = 832
 
-        root = '/remote-home/my/OSCC-Tile-v2/5x_5000/'
+        root = '/media/ldy/e5a10f4e-18fd-4656-80d8-055bc4078655/OSCC-Tile-v2/'
         # data config
         self.trainset_cfg = {
-            "img_dir": root + "train/",
-            "mask_dir": root + "train_mask/",
-            "meta_file": root + "train_5000.csv",
+            "img_dir": root + "5x_5000/train/",
+            "mask_dir": root + "5x_5000/train_mask/",
+            "meta_file": root + "5x_5000/train_5000.csv",
             "label": True,
         }
         self.valset_cfg = {
-            "img_dir": root + "val/",
-            "mask_dir": root + "val_mask/",
-            "meta_file": root + "val_5000.csv",
+            "img_dir": root + "5x_4000/val/",
+            "mask_dir": root + "5x_4000/val_mask/",
+            "meta_file": root + "5x_4000/val_4000.csv",
             "label": True,
         }
         self.slideset_cfg = {  # for slide level inference
-            "img_dir": root + "val/",
-            "meta_file": root + "tile_info_val_5000.json",
-            "mask_dir": root + "val_mask/",
+            "img_dir": root + "5x_4000/val/",
+            "meta_file": root + "5x_4000/tile_info_val_4000.json",
+            "mask_dir": root + "5x_4000/val_mask/",
             "label": True,
         }
 
@@ -41,13 +42,13 @@ class Config:
         self.lr = 1e-4
         self.num_epochs = 150
         self.warmup_epochs = 2
-        self.batch_size = 2
+        self.batch_size = 8
         self.sub_batch_size = 8
         ckpt_path = "" # pretrained model
         self.path_g = os.path.join(ckpt_path, "")
         self.path_g2l = os.path.join(ckpt_path, "")
         self.path_l2g = os.path.join(ckpt_path, "")
-        self.num_workers = 4
+        self.num_workers = 2
         self.evaluation = True  # evaluatie val set
         self.val_vis = True # val result visualization
 
