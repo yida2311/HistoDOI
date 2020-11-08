@@ -72,7 +72,7 @@ class Trainer(object):
         masks = masks.cuda()
         preds = model.forward(imgs)
         preds = F.interpolate(preds, size=(masks.size(1), masks.size(2)), mode='bilinear')
-        loss = self.criterion(preds, masks)
+        loss = self.criterion(preds, masks)  
         loss.backward()
         self.optimizer.step()
         self.optimizer.zero_grad()

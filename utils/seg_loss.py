@@ -11,9 +11,10 @@ class DecoupledSegLoss_v1(nn.Module):
     """Decoupled Segmentation loss 
         clean set: CrossEntropy, noisy set: SymmetricCrossEntropy
     """
-    def __init__(self, num_classes=4, alpha=1, beta=1, ignore_index=-1):
-        self.clean_loss = CrossEntropyLoss(ignore_index=ignore_index)
-        self.noisy_loss = SymmetricCrossEntropyLoss(alpha=alpha, beta=beta, num_classes=num_classes, ignore_index=ignore_index)
+    def __init__(self, num_classes=4, alpha=1, beta=1, ignore_index=-1, reduction='mean'):
+        super(DecoupledSegLoss_v1, self).__init__()
+        self.clean_loss = CrossEntropyLoss(ignore_index=ignore_index, reduction=reduction)
+        self.noisy_loss = SymmetricCrossEntropyLoss(alpha=alpha, beta=beta, num_classes=num_classes, ignore_index=ignore_index, reduction=reduction)
         self.ignore_index = ignore_index
     
     def forward(self, inputs, targets):
@@ -23,8 +24,8 @@ class DecoupledSegLoss_v1(nn.Module):
         return loss_clean + loss_noisy
         
     def decoupleTargets(self, targets):
-        clean_mask = (targets==0) or (targets==1)
-        noisy_mask = (targets==2) or (targets==3)
+        clean_mask = (targets==0) + (targets==1)
+        noisy_mask = (targets==2) + (targets==3)
         clean_targets = targets
         clean_targets[noisy_mask] = self.ignore_index
         noisy_targets = targets
@@ -37,26 +38,42 @@ class DecoupledSegLoss_v2(nn.Module):
     """Decoupled Segmentation loss 
         clean set: Focal, noisy set: SymmetricCrossEntropy
     """
-    def __init__(self, num_classes=4, alpha=1, beta=1, gamma=1, ignore_index=-1):
-        self.clean_loss = FocalLoss(gamma=gamma, ignore=ignore_index)
-        self.noisy_loss = SymmetricCrossEntropyLoss(alpha=alpha, beta=beta, num_classes=num_classes, ignore_index=ignore_index)
+    def __init__(self, num_classes=4, alpha=1, beta=1, gamma=1, ignore_index=-1, reduction='mean'):
+        super(DecoupledSegLoss_v2, self).__init__()
+        self.clean_loss = FocalLoss(gamma=gamma, ignore_index=ignore_index, reduction=reduction)
+        self.noisy_loss = SymmetricCrossEntropyLoss(alpha=alpha, beta=beta, num_classes=num_classes, ignore_index=ignore_index, reduction=reduction)
         self.ignore_index = ignore_index
     
     def forward(self, inputs, targets):
-        clean_targets, noisy_targets = self.decoupleTargets(targets)
-        loss_clean = self.clean_loss(inputs, clean_targets)
-        loss_noisy = self.noisy_loss(inputs, noisy_targets)
-        return loss_clean + loss_noisy
+        B, C, H, W = inputs.size()
+        inputs = inputs.permute(0, 2, 3, 1).contiguous().view(-1, C)  # B * H * W, C = P, C
+        targets = targets.view(-1)
+
+        clean_mask, noisy_mask = self.decoupleTargets(targets)
+        if targets[clean_mask].size(0) == 0:
+            loss_clean = 0
+        else:
+            loss_clean = self.clean_loss(inputs[clean_mask], targets[clean_mask]) 
+        if targets[noisy_mask].size(0) == 0:
+            loss_noisy = 0
+        else:
+            loss_noisy = self.noisy_loss(inputs[noisy_mask], targets[noisy_mask])
+        # print(loss_clean, loss_noisy)
+        return loss_noisy+loss_clean
         
     def decoupleTargets(self, targets):
-        clean_mask = (targets==0) or (targets==1)
-        noisy_mask = (targets==2) or (targets==3)
-        clean_targets = targets
-        clean_targets[noisy_mask] = self.ignore_index
-        noisy_targets = targets
-        noisy_targets[clean_mask] = self.ignore_index
+        clean_mask = (targets==0) + (targets==1)
+        noisy_mask = (targets==2) + (targets==3)
+        # clean_targets = targets.clone()
+        # clean_targets[noisy_mask] = self.ignore_index
+        # noisy_targets = targets.clone()
+        # noisy_targets[clean_mask] = self.ignore_index
 
-        return clean_targets, noisy_targets
+        # clean_targets = targets[clean_mask]
+        # noisy_targets = targets[noisy_mask]
+
+        # return clean_targets, noisy_targets
+        return clean_mask, noisy_mask
 
 
 #======================= SCHP Loss ======================================
@@ -132,12 +149,12 @@ class KLDivergenceLoss(nn.Module):
 
 #================== Symmetric Cross Entropy Loss =========================
 class SymmetricCrossEntropyLoss(nn.Module):
-    def __init__(self, alpha, beta, num_classes=4, ignore_index=-100):
+    def __init__(self, alpha, beta, num_classes=4, ignore_index=-100, reduction='mean'):
         super(SymmetricCrossEntropyLoss, self).__init__()
         self.alpha = alpha
         self.beta = beta
-        self.ce_loss = CrossEntropyLoss()
-        self.rce_loss = ReverseCrossEntropyLoss(num_classes=num_classes)
+        self.ce_loss = CrossEntropyLoss(ignore_index=ignore_index, reduction=reduction)
+        self.rce_loss = ReverseCrossEntropyLoss(num_classes=num_classes, reduction=reduction)
 
     def forward(self, inputs, targets):
         ce = self.ce_loss(inputs, targets)
@@ -148,39 +165,56 @@ class SymmetricCrossEntropyLoss(nn.Module):
 
 
 class CrossEntropyLoss(nn.Module):
-    def __init__(self, ignore_index=-100):
+    def __init__(self, ignore_index=-100, reduction='mean'):
         super(CrossEntropyLoss, self).__init__()
-        self.nll_loss = nn.NLLLoss(ignore_index=ignore_index)
+        self.nll_loss = nn.NLLLoss(ignore_index=ignore_index, reduction=reduction)
 
     def forward(self, inputs, targets):
         return self.nll_loss(F.log_softmax(inputs, dim=1), targets)
 
 
 class ReverseCrossEntropyLoss(nn.Module):
-    def __init__(self, num_classes=4, ignore_index=-100):
+    def __init__(self, num_classes=4, ignore_index=-100, reduction='mean'):
         super(ReverseCrossEntropyLoss, self).__init__()
         self.num_classes = num_classes
+        self.reduction = reduction
+        self.ignore_index = ignore_index
 
     def forward(self, inputs, targets):
         pred = F.softmax(inputs, dim=1)
         pred = torch.clamp(pred, min=1e-7, max=1.0)
 
+        if inputs.dim() == 4:
+            B, C, H, W = inputs.size()
+            pred = pred.permute(0, 2, 3, 1).contiguous().view(-1, C)  # B * H * W, C = P, C
+            targets = targets.view(-1)
+
+        if self.ignore_index is not None:
+            valid = (targets != self.ignore_index)
+            pred = pred[valid]
+            targets = targets[valid]
+
         targets_one_hot = one_hot(targets, self.num_classes)
         targets_one_hot = torch.clamp(targets_one_hot, min=1e-4, max=1.0)
 
         loss = -1 * torch.sum(pred * torch.log(targets_one_hot), dim=1)
+        # print(loss)
+        if self.reduction == 'mean':
+            loss = loss.mean()
+        elif self.reduction == 'sum':
+            loss = loss.sum()
 
-        return loss.mean()
+        return loss
 
 
 #===================== Normalized Symmetric Cross Entropy Loss =====================
 class NormalizedSymmetricCrossEntropyLoss(nn.Module):
-    def __init__(self, alpha, beta, num_classes=4, ignore_index=-100):
+    def __init__(self, alpha, beta, num_classes=4, ignore_index=-100, reduction='mean'):
         super(NormalizedSymmetricCrossEntropyLoss, self).__init__()
         self.alpha = alpha
         self.beta = beta
-        self.nce_loss = NormalizedCrossEntropyLoss(num_classes=num_classes)
-        self.nrce_loss = NormalizedReverseCrossEntropyLoss(num_classes=num_classes)
+        self.nce_loss = NormalizedCrossEntropyLoss(num_classes=num_classes, ignore_index=ignore_index, reduction=reduction)
+        self.nrce_loss = NormalizedReverseCrossEntropyLoss(num_classes=num_classes, ignore_index=ignore_index, reduction=reduction)
 
     def forward(self, inputs, targets):
         nce = self.nce_loss(inputs, targets)
@@ -191,27 +225,55 @@ class NormalizedSymmetricCrossEntropyLoss(nn.Module):
 
 
 class NormalizedCrossEntropyLoss(nn.Module):
-    def __init__(self, num_classes=4, ignore_index=-100):
+    def __init__(self, num_classes=4, ignore_index=-100, reduction='mean'):
         super(NormalizedCrossEntropyLoss, self).__init__()
         self.num_classes = num_classes
+        self.reduction = reduction
+        self.ignore_index = ignore_index
 
     def forward(self, inputs, targets):
         pred = F.log_softmax(inputs, dim=1)
+        B, C, H, W = inputs.size()
+        pred = pred.permute(0, 2, 3, 1).contiguous().view(-1, C)  # B * H * W, C = P, C
+        targets = targets.view(-1)
+
+        if self.ignore_index is not None:
+            valid = (targets != self.ignore_index)
+            pred = pred[valid]
+            targets = targets[valid]
+
         targets_one_hot = one_hot(targets, self.num_classes)
         ce =  -1 * torch.sum(targets_one_hot * pred, dim=1)
         C = -1 * torch.sum(pred, dim=1)
         nce = torch.div(ce, C)
-        return nce.mean()
+
+        if self.reduction == 'mean':
+            nce = nce.mean()
+        elif self.reduction == 'sum':
+            nce = nce.sum()
+
+        return nce
 
 
 class NormalizedReverseCrossEntropyLoss(nn.Module):
-    def __init__(self, num_classes=4, ignore_index=-100):
+    def __init__(self, num_classes=4, ignore_index=-100, reduction='mean'):
         super(NormalizedReverseCrossEntropyLoss, self).__init__()
         self.num_classes = num_classes
+        self.reduction = reduction
+        self.ignore_index = ignore_index
 
     def forward(self, inputs, targets):
         pred = F.softmax(inputs, dim=1)
         pred = torch.clamp(pred, min=1e-7, max=1.0)
+
+        B, C, H, W = inputs.size()
+        pred = pred.permute(0, 2, 3, 1).contiguous().view(-1, C)  # B * H * W, C = P, C
+        targets = targets.view(-1)
+
+        if self.ignore_index is not None:
+            valid = (targets != self.ignore_index)
+            pred = pred[valid]
+            targets = targets[valid]
 
         targets_one_hot = one_hot(targets, self.num_classes)
         targets_one_hot = torch.clamp(targets_one_hot, min=1e-4, max=1.0)
@@ -219,44 +281,52 @@ class NormalizedReverseCrossEntropyLoss(nn.Module):
         rce = -1 * torch.sum(pred * torch.log(targets_one_hot), dim=1)
         nrce = rce / (self.num_classes-1) / 4
 
-        return nrce.mean()
+        if self.reduction == 'mean':
+            nrce = nrce.mean()
+        elif self.reduction == 'sum':
+            nrce = nrce.sum()
+
+        return nrce
 
 
 #======================================= Focal Loss ======================================
 class FocalLoss(nn.Module):
-
-    def __init__(self, gamma=0, eps=1e-7, size_average=True, one_hot=True, ignore=None):
+    def __init__(self, gamma=0, eps=1e-7, one_hot=True, ignore_index=None, reduction='mean'):
         super(FocalLoss, self).__init__()
         self.gamma = gamma
         self.eps = eps
-        self.size_average = size_average
+        self.reduction = reduction
         self.one_hot = one_hot
-        self.ignore = ignore
+        self.ignore_index = ignore_index
 
     def forward(self, input, target):
         '''
         only support ignore at 0
         '''
-        B, C, H, W = input.size()
-        input = input.permute(0, 2, 3, 1).contiguous().view(-1, C)  # B * H * W, C = P, C
-        target = target.view(-1)
-        if self.ignore is not None:
-            valid = (target != self.ignore)
+        if input.dim() == 4:
+            B, C, H, W = input.size()
+            input = input.permute(0, 2, 3, 1).contiguous().view(-1, C)  # B * H * W, C = P, C
+            target = target.view(-1)
+
+        if self.ignore_index is not None:
+            valid = (target != self.ignore_index)
             input = input[valid]
             target = target[valid]
 
-        if self.one_hot: target = one_hot(target, input.size(1))
+        if self.one_hot: 
+            target = one_hot(target, input.size(1))
+
         probs = F.softmax(input, dim=1)
         probs = (probs * target).sum(1)
         probs = probs.clamp(self.eps, 1. - self.eps)
-
         log_p = probs.log()
         batch_loss = -(torch.pow((1 - probs), self.gamma)) * log_p
 
-        if self.size_average:
+        if self.reduction == 'mean':
             loss = batch_loss.mean()
-        else:
+        elif self.reduction == 'sum':
             loss = batch_loss.sum()
+        
         return loss
 
 
