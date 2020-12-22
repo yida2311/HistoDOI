@@ -14,13 +14,11 @@ from torch.utils.data import Dataset
 def cv2_image_loader(path):
     img = cv2.imread(path)
     img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
-
     return img 
 
 def cv2_mask_loader(path):
     mask = cv2.imread(path, 0)
     # mask = cv2.cvtColor(mask, cv2.COLOR_BGR2GRAY)
-
     return mask
 
 
@@ -41,6 +39,8 @@ class OralDatasetSeg(Dataset):
 
         df = pd.read_csv(meta_file)
         self.samples = df  
+        # self.ids = list(range(len(self.samples)))
+        # random.shuffle(self.ids)
     
     def __getitem__(self, index):
         info = self.samples.iloc[index]

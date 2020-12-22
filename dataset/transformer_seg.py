@@ -11,7 +11,7 @@ ImageFile.LOAD_TRUNCATED_IMAGES = True
 
 
 class TransformerSeg:
-    def __init__(self, crop_size=1024):
+    def __init__(self, crop_size=800):
         self.master = albumentations.Compose([
             albumentations.RandomCrop(crop_size, crop_size),
             albumentations.RandomRotate90(p=0.5),
@@ -29,7 +29,7 @@ class TransformerSeg:
                 albumentations.HueSaturationValue(),
             ], p=0.5),
             albumentations.ElasticTransform(),
-            albumentations.ShiftScaleRotate(shift_limit=0.1, scale_limit=0.1, rotate_limit=15, p=0.5),
+            albumentations.ShiftScaleRotate(shift_limit=0.1, scale_limit=0.02, rotate_limit=15, p=0.5),
             albumentations.Normalize(mean=[0.798, 0.621, 0.841], std=[0.125, 0.228, 0.089]),
         ])
         self.to_tensor = ToTensor()
