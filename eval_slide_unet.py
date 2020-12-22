@@ -34,7 +34,7 @@ def main(cfg, slide_list):
     slideset_cfg = cfg.slideset_cfg
     evaluation = slideset_cfg["label"]
     slide_time = AverageMeter("DataTime", ':3.3f')
-    transformer = TransformerSegVal
+    transformer = TransformerSegVal()
     dataset = OralSlideSeg(
         slide_list, 
         slideset_cfg["img_dir"], 
@@ -48,7 +48,7 @@ def main(cfg, slide_list):
     print("creating models......")
     model = Unet(classes=cfg.n_class, encoder_name=cfg.encoder, **cfg.model_cfg)
     # model = create_model_load_weights_v2(model, evaluation=True, ckpt_path=ckpt_path)
-    model = create_model_load_weights(model, evaluation=True, ckpt_path=cfg.ckpt_path)
+    model = create_model_load_weights(model, device=torch.device("cuda:0"), evaluation=True, ckpt_path=cfg.ckpt_path)
     model.cuda()
 
     f_log = open(os.path.join(cfg.log_path, "_test.log"), 'w')
@@ -60,7 +60,7 @@ def main(cfg, slide_list):
     for i in tbar:
         start_time = time.time()
         dataset.get_patches_from_index(i)
-        prediction, output = evaluator.inference(dataset, model)
+        prediction, output, _ = evaluator.inference(dataset, model)
         output = cv2.cvtColor(output, cv2.COLOR_BGR2RGB)
         cv2.imwrite(os.path.join(cfg.output_path, dataset.slide+'.png'), output)
         slide_time.update(time.time()-start_time)
@@ -69,9 +69,9 @@ def main(cfg, slide_list):
             mask = dataset.get_slide_mask_from_index(i)
             evaluator.update_scores(mask, prediction)
             scores = evaluator.get_scores()
-            tbar.set_description('Slide: {}'.format(slide) + ', mIOU: %.5f; slide time: %.2f' % (scores['iou_mean'], slide_time.avg))
+            tbar.set_description('Slide: {}'.format(dataset.slide) + ', mIOU: %.5f; slide time: %.2f' % (scores['iou_mean'], slide_time.avg))
         else:
-            tbar.set_description('Slide: {}'.format(slide) + ', slide time: %.2f' % (slide_time.avg))
+            tbar.set_description('Slide: {}'.format(dataset.slide) + ', slide time: %.2f' % (slide_time.avg))
     
     if evaluation:
         scores = evaluator.get_scores()
