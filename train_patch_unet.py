@@ -24,7 +24,7 @@ from utils.seg_loss import FocalLoss, SymmetricCrossEntropyLoss, DecoupledSegLos
 from utils.data import class_to_RGB
 from helper.helper_unet import Trainer, Evaluator, save_ckpt_model, update_log, update_writer
 from helper.utils import get_optimizer, create_model_load_weights
-from helper.config_unet import Config
+from helper.config_unet_local import Config
 
 
 def argParser():
@@ -60,6 +60,7 @@ def main(cfg, distributed=False):
     n_class = cfg.n_class
     model_path = cfg.model_path # save model
     log_path = cfg.log_path
+    writer_path = cfg.writer_path
     output_path = cfg.output_path
 
     if local_rank == 0:
@@ -67,6 +68,8 @@ def main(cfg, distributed=False):
             os.makedirs(model_path)
         if not os.path.exists(log_path): 
             os.makedirs(log_path)
+        if not os.path.exists(writer_path):
+            os.makedirs(writer_path)
         if not os.path.exists(output_path): 
             os.makedirs(output_path)
 
@@ -153,7 +156,7 @@ def main(cfg, distributed=False):
         f_log.flush()
     # writer
     if local_rank == 0:
-        writer = SummaryWriter(log_dir=log_path)
+        writer = SummaryWriter(log_dir=writer_path)
     writer_info = {}
 
     for epoch in range(num_epochs):
@@ -161,7 +164,7 @@ def main(cfg, distributed=False):
         num_batch = len(dataloader_train)
         tbar = tqdm(dataloader_train)
         train_loss = 0
-
+        
         start_time = time.time()
         model.train()
         for i_batch, sample in enumerate(tbar):
@@ -171,7 +174,7 @@ def main(cfg, distributed=False):
             if distributed:
                 loss = trainer.train(sample, model)
             else:
-                loss = trainer.train_acc(sample, model, i_batch, 4, num_batch)
+                loss = trainer.train_acc(sample, model, i_batch, 2, num_batch)
             train_loss += loss.item()
             scores_train = trainer.get_scores()
 
@@ -181,7 +184,7 @@ def main(cfg, distributed=False):
             if i_batch % 20 == 0 and local_rank == 0:
                 tbar.set_description('Train loss: %.4f; mIoU: %.4f; data time: %.2f; batch time: %.2f' % 
                                 (train_loss / (i_batch + 1), scores_train["iou_mean"], data_time.avg, batch_time.avg))
-        
+
         trainer.reset_metrics()
         data_time.reset()
         batch_time.reset()
@@ -204,12 +207,17 @@ def main(cfg, distributed=False):
                                         (scores_val["iou_mean"], data_time.avg, batch_time.avg))
 
                     
-                    if val_vis and i_batch == len(tbar)//2: # val set result visualize
-                            mask_rgb = class_to_RGB(sample['mask'][1].numpy())
-                            mask_rgb = ToTensor()(mask_rgb)
-                            predictions_rgb = class_to_RGB(predictions[1])
-                            predictions_rgb = ToTensor()(predictions_rgb)
-                            writer_info.update(mask=mask_rgb, prediction=predictions_rgb)
+                    if val_vis: # val set result visualize
+                        for i in range(batch_size):
+                            name = sample['id'][i] + '.png'
+                            slide = name.split('_')[0] 
+                            slide_dir = os.path.join(output_path, slide)
+                            if not os.path.exists(slide_dir):
+                                os.makedirs(slide_dir)
+                            predictions_rgb = class_to_RGB(predictions[i])
+                            predictions_rgb = cv2.cvtColor(predictions_rgb, cv2.COLOR_BGR2RGB)
+                            cv2.imwrite(os.path.join(slide_dir, name), predictions_rgb)
+                            # writer_info.update(mask=mask_rgb, prediction=predictions_rgb)
                     start_time = time.time()
                     
                 data_time.reset()
