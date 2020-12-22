@@ -121,6 +121,44 @@ class globalBranch(nn.Module):
         return output, ps0, ps1, ps2, ps3
 
 
+def globalNet(nn.Module):
+    def __init__(
+        self,
+        n_class,
+        encoder_name: str = 'resnet18',
+        decoder_channels = [256, 128, 64, 64],
+        attention_type = None,
+    ):
+        super(globalNet, self).__init__()
+        self._up_kwargs = {'mode': 'bilinear'}
+        self.encoder_channels = encoders[encoder_name]["params"]["out_channels"][::-1]
+        self.decoder_channels = decoder_channels
+        self.encoder = get_encoder(
+            encoder_name,
+            in_channels=3,
+            depth=5,
+            weights="imagenet",
+        )
+        self.decoder = globalBranch(
+            n_class,
+            encoder_channels=self.encoder_channels,
+            decoder_channels=self.decoder_channels,
+            attention_type=attention_type,
+            center=True,
+        )
+
+        # init decoder
+        for m in self.decoder.children():
+            if hasattr(m, 'weight'): nn.init.normal_(m.weight, mean=0, std=0.01)
+            if hasattr(m, 'bias'): nn.init.constant_(m.bias, 0)
+    
+
+    def forward(self, image):
+        feat = self.encoder_global.forward(image)
+        output, ps0, ps1, ps2, ps3 = self.decoder.forward(feat)
+
+
+
 class localBranch(nn.Module):
     def __init__(
             self, 
