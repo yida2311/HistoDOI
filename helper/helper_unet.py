@@ -66,7 +66,7 @@ class Trainer(object):
         model.train()
         imgs = sample['image']
         masks = sample['mask'].squeeze(1)
-
+        
         imgs = imgs.cuda()
         masks_npy = np.array(masks)
         masks = masks.cuda()
@@ -217,6 +217,12 @@ class SlideInference(object):
                 output[:, x:x+h, y:y+w] += preds_np[i]
                 template[x:x+h, y:y+w] += np.ones((h, w), dtype='uint8')
     
+                # temp_path = '/home/ldy/test_case/'+dataset.slide
+                # if not os.path.exists(temp_path):
+                #     os.makedirs(temp_path)
+
+                # cv2.imwrite(temp_path+'/'+ dataset.slide + '_'+str(coord[i][0])+"_"+str(coord[i][1])+'.png', class_to_RGB(np.argmax(preds_np[i], axis=0)))
+                
         template[template==0] = 1
         output = output / template
         prediction = np.argmax(output, axis=0)

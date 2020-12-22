@@ -4,44 +4,53 @@ class Config:
     def __init__(self, train=True):
         # model config
         self.model = "unet"
-        self.encoder = "resnet18"  
+        self.encoder = "resnet34"  
         self.n_class = 4
         self.model_cfg = {
             'encoder_depth': 5,
             'encoder_weights': 'imagenet',
             'decoder_use_batchnorm': True,
-            'decoder_channels': (512, 256, 128, 64, 64),
+            'decoder_channels': (512, 256, 128, 64),
             'decoder_attention_type': 'scse',
             'in_channels': 3,
         }
 
         # data config
+        # root = '/remote-home/my/OSCC-Tile-v2/'
+        root = '/media/ldy/e5a10f4e-18fd-4656-80d8-055bc4078655/OSCC-Tile-v3/5x_1000/'
+        # root = '/media/ldy/e5a10f4e-18fd-4656-80d8-055bc4078655/OSCC-Tile-v2/5x_1600/'
         self.trainset_cfg = {
-            "img_dir": "",
-            "mask_dir": "",
-            "meta_file": "",
+            "img_dir": root + "patch/",
+            "mask_dir": root + "std_mask/",
+            "meta_file": root + "train.csv",
             "label": True,
         }
         self.valset_cfg = {
-            "img_dir": "",
-            "mask_dir": "",
-            "meta_file": "",
+            "img_dir": root +  "patch/",
+            "mask_dir": root + "std_mask/",
+            "meta_file": root + "val.csv",
             "label": True,
         }
         self.slideset_cfg = {  # for slide level inference
-            "img_dir": "",
-            "meta_file": "",
-            "mask_dir": "",
+            "img_dir": root + "patch/",
+            "meta_file": root + "tile_info.json",
+            "mask_dir": '/media/ldy/e5a10f4e-18fd-4656-80d8-055bc4078655/OSCC-Tile-v3/5x_mask/std_mask/',
             "label": True,
         }
+        # self.slideset_cfg = {  # for slide level inference
+        #     "img_dir": root + "val/",
+        #     "meta_file": root + "tile_info_val_1600.json",
+        #     "mask_dir": root + "val_mask/",
+        #     "label": False,
+        # }
 
         # train config
         self.scheduler = 'poly' # ['cos', 'poly', 'step', 'ym']
         self.lr = 1e-4
-        self.num_epochs = 150
+        self.num_epochs = 120
         self.warmup_epochs = 2
-        self.batch_size = 8
-        self.ckpt_path = "" # pretrained model
+        self.batch_size = 4
+        self.ckpt_path = None #"/home/ldy/HistoDOI/results-v3/saved_models/unet-resnet34-sce-poly-0.0001-150-[10-13-01]-train/unet-resnet34-129-0.88217.pth" # pretrained model
         self.num_workers = 4
         self.evaluation = True  # evaluatie val set
         self.val_vis = True # val result visualization
@@ -62,20 +71,17 @@ class Config:
 
         }
 
-        # schp config
-        self.schp_model_path = ""
-        self.cyclical_epoch = 20
-
         # task name
-        self.task_name = "-".join([self.model, self.encoder, self.loss, self.scheduler, str(self.lr), str(self.num_epochs), simple_time()])
+        self.task_name = "-".join([self.model, 'local', self.encoder, self.loss, self.scheduler, str(self.lr), str(self.num_epochs), simple_time()])
         if train:
             self.task_name += "-" + "train"
         else:
             self.task_name += "-" + "test"
         # output config
-        out_root = "results-v2/"
+        out_root = "results-v3/"
         self.model_path = out_root + "saved_models/" + self.task_name
-        self.log_path = out_root + "logs/" + self.task_name
+        self.log_path = out_root + "logs/" 
+        self.writer_path = out_root + 'writers/' + self.task_name
         self.output_path = out_root + "predictions/" + self.task_name
 
         
