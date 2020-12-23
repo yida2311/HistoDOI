@@ -22,7 +22,7 @@ def cv2_mask_loader(path):
     return mask
 
 
-class OralDatasetSeg(Dataset):
+class OralDataset(Dataset):
     """ OralDataset for classification"""
     def __init__(self,
                 img_dir,
@@ -30,7 +30,7 @@ class OralDatasetSeg(Dataset):
                 meta_file,
                 label=True,  # True: has label
                 transform=None):
-        super(OralDatasetSeg, self).__init__()
+        super(OralDataset, self).__init__()
         self.img_dir = img_dir
         self.label = label 
         if self.label:
@@ -63,7 +63,7 @@ class OralDatasetSeg(Dataset):
         return len(self.samples)
 
 
-class OralSlideSeg(Dataset):
+class OralSlide(Dataset):
     """OralSlide for segmentation"""
     def __init__(self,
                 slide_list,
@@ -81,7 +81,7 @@ class OralSlideSeg(Dataset):
             label: if True, used for train/val; if False, used for test
             transform: image preprocess
         """
-        super(OralSlideSeg, self).__init__()
+        super(OralSlide, self).__init__()
         self.slides = slide_list
         self.img_dir = img_dir
         self.label = label 
@@ -104,7 +104,6 @@ class OralSlideSeg(Dataset):
         """
         slide = self.slides[index]
         slide_mask_dir = os.path.join(self.slide_mask_dir, slide+'.png')
-        print(slide_mask_dir)
         slide_mask = cv2_mask_loader(slide_mask_dir)
         
         return slide_mask
@@ -143,8 +142,8 @@ class OralSlideSeg(Dataset):
 
     def _parse_patch_name(self, patch):
         sp = patch.split('_')
-        ver = int(sp[2])
-        col = int(sp[3])
+        ver = int(sp[1])
+        col = int(sp[2])
         return ver, col 
 
 
