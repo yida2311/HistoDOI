@@ -38,6 +38,7 @@ def update_log(f_log, cfg, scores_train, scores_val, epoch):
     f_log.write(log)
     f_log.flush()
 
+
 def update_writer(writer, writer_info, epoch):
     for k, v in writer_info.items():
         if isinstance(v, dict):
@@ -48,6 +49,33 @@ def update_writer(writer, writer_info, epoch):
             writer.add_scalar(k, v, epoch)
 
 
+def create_model_load_weights(model, device, distributed=False, local_rank=0, evaluation=False, ckpt_path=None):
+    if evaluation and ckpt_path:  # load checkpoint
+        state_dict = torch.load(ckpt_path)
+        if 'module' in next(iter(state_dict)):
+            state_dict = Parallel2Single(state_dict)
+        state = model.state_dict()
+        state.update(state_dict)
+        model.load_state_dict(state)
+    
+    if distributed:
+        model = nn.SyncBatchNorm.convert_sync_batchnorm(model)
+        model.to(device)
+        model = nn.parallel.DistributedDataParallel(model, device_ids=[local_rank], output_device=local_rank, find_unused_parameters=True)
+    else:
+        model.to(device)
+
+    return model
+
+
+def get_optimizer(model, learning_rate=2e-5):
+    optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate, weight_decay=5e-4)
+    # optimizer = torch.optim.SGD(model.parameters(), lr=learning_rate, momentum=0.9, weight_decay=1e-4)
+    return optimizer
+
+
+#============================================================================================================================
+#============================================================================================================================
 class Trainer(object):
     def __init__(self, criterion, optimizer, n_class):
         self.criterion = criterion
