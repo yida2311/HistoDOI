@@ -3,10 +3,103 @@ import torch.nn.functional as F
 import torch
 from .lovasz_loss import LovaszSoftmax
 
-__all__ = ['SchpLoss', 'CrossEntropyLoss', 'SymmetricCrossEntropyLoss', 
+__all__ = ['FRSegLoss', 'SchpLoss', 'CrossEntropyLoss', 'SymmetricCrossEntropyLoss', 
             'NormalizedSymmetricCrossEntropyLoss', 'FocalLoss', 'SoftCrossEntropyLoss2d']
 
 
+#===========================================================================================================================
+class FRSegLoss(nn.Module):
+    """Filling Rate combined segmentation loss, contains TopKSegLoss, UnaryLoss and FillingRate term
+        Args:
+            num_classes: num of classes,
+            alpha: weight of unary term,
+            beta: weight of filling rate term,
+            reduction: "mean" for averge, "sum" for sum,
+            momentum: update weight for filling rate term
+        
+        Return:
+            loss,
+            filling rates,
+            """
+    def __init__(self, num_classes, alpha=1.0, beta=3, momentum=0.8, reduction='mean'):
+        super(FRSegLoss, self).__init__()
+
+        self.momentum = momentum
+        self.num_classes = num_classes
+        self.alpha = alpha
+        self.beta = beta
+
+        self.unary_loss = nn.MSELoss(reduction=reduction)
+        self.topk_seg_loss = TopKSegLoss(num_classes=self.num_classes)
+
+
+    def forward(self, inputs, targets, unarys, frs, old_frs):
+        """
+        Args:
+            inputs: b x c x h x w
+            targets: b x h x w
+            unarys: b x (1/2) x h x w
+            frs: b x (1/2)    
+        """
+        b, c, h, w = inputs.size()
+        if self.num_classes == 3:
+            targets_bin = torch.stack([targets==2], dim=1)  #　binary mask, b x 1 x h x w
+        else:
+            targets_bin = torch.stack([targets==2, targets==3], dim=1) # b x 2 x h x w
+        targets_bin = targets_bin.clone().float().cuda()
+        unarys_bin = unarys * targets_bin #　focused unarys
+        num_unary = torch.sum(targets_bin, dim=(2, 3)) # b x (1/2)
+        filling_rates =  frs * h * w  / (num_unary+10)
+        filling_rates = torch.clamp(self.momentum * filling_rates + (1-self.momentum) * old_frs, max=1)
+        topk = (filling_rates * num_unary).clone().detach()
+
+        topk_term = self.topk_seg_loss(inputs, targets, unarys_bin, topk, num_unary)
+        unary_term = self.unary_loss(unarys, targets_bin)
+        fr_term = torch.mean(filling_rates)
+
+        loss = topk_term + self.alpha * unary_term + self.beta * fr_term
+        return loss, filling_rates
+
+
+class TopKSegLoss(nn.Module):
+    """TopK Segmentation Loss where topk is focousing on foreground region and background region remain the same.
+    Args
+    """
+    def __init__(self, num_classes):
+        super(TopKSegLoss, self).__init__()
+        self.num_classes = num_classes
+        self.ce = nn.CrossEntropyLoss(ignore_index=-1, reduction='sum')
+    
+    def forward(self, inputs, targets, unarys, topk, num_unary):
+        b, c, h, w = inputs.size()
+        targets_bg = targets 
+        targets_bg[targets_bg==2] = - 1
+        if self.num_classes != 3:
+            targets_bg[targets_bg==3] = -1
+        loss_bg = self.ce(inputs, targets) / (b*h*w - torch.sum(num_unary) + 1)
+
+        loss_fg = 0
+        if self.num_classes == 3:
+            for i in range(b):
+                if topk[i] > 0:
+                    _, indices = torch.topk(unarys[i].view(-1), int(topk[i]))
+                    anchor = inputs[i].view(1, c, -1)[:, :, indices]
+                    targets_fg = targets[i].view(1, -1)[:, indices]
+                    loss_fg += self.ce(anchor, targets_fg)
+        else:
+            for i in ranage(b):
+                for j in range(2):
+                    if topk[i][j] > 0:
+                        _, indices = torch.topk(unarys[i][j].view(-1), int(topk[i][j]))
+                        anchor = inputs[i].view(1, c, -1)[:, :, indices]
+                        targets_fg = targets[i].view(1, -1)[:, indices]
+                        loss_fg += self.ce(anchor, targets_fg)
+        loss_fg /= torch.sum(topk)
+
+        return (loss_bg + loss_fg)/2
+
+
+#============================================================================================================================
 class DecoupledSegLoss_v1(nn.Module):
     """Decoupled Segmentation loss 
         clean set: CrossEntropy, noisy set: SymmetricCrossEntropy
