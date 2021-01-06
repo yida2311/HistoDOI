@@ -201,6 +201,19 @@ class UnetDecoder(nn.Module):
         ]
         self.blocks = nn.ModuleList(blocks)
 
+    def extract_features(self, *features):
+        head = features[0] # x32
+        skips = features[1:] # [x16, x8, x4, x2]
+
+        x = self.center(head)
+        outputs = []
+        for i, decoder_block in enumerate(self.blocks):
+            skip = skips[i] if i < len(skips) else None
+            x = decoder_block(x, skip)
+            outputs.append(x)
+        
+        return outputs
+
     def forward(self, *features): 
         # features: [c5, c4, c3, c2, c1]
         head = features[0] # x32
@@ -212,3 +225,4 @@ class UnetDecoder(nn.Module):
             x = decoder_block(x, skip)
 
         return x   # x2
+

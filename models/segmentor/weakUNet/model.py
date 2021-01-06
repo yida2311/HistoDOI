@@ -1,11 +1,18 @@
+import torch
 from typing import Optional, Union, List
-from .decoder import UnetDecoder
+from torch import nn
+import torch.nn.functional as F
+from torch.nn import Parameter
+
+from ..dynamicUNet.decoder import UnetDecoder
 from ...encoders import get_encoder
-from segmentation_models_pytorch.base import SegmentationHead, SegmentationModel, ClassificationHead
+from segmentation_models_pytorch.base import SegmentationHead, ClassificationHead
+from segmentation_models_pytorch.base import modules as md
+import segmentation_models_pytorch.base.initialization as init
 
 
-class Unet(SegmentationModel):
-    """Unet_ is a fully convolution neural network for image semantic segmentation
+class WeakUnet(nn.Module):
+    """ WeakUnet is a fully convolution neural network for weakly-supervised image semantic segmentation derived from UNet
 
     Args:
         encoder_name: name of classification model (without last dense layers) used as feature
@@ -33,10 +40,8 @@ class Unet(SegmentationModel):
                 - activation (str): activation function to apply "sigmoid"/"softmax" (could be None to return logits)
 
     Returns:
-        ``torch.nn.Module``: **Unet**
+        ``torch.nn.Module``: **WeakUnet**
 
-    .. _Unet:
-        https://arxiv.org/pdf/1505.04597
 
     """
 
@@ -49,11 +54,13 @@ class Unet(SegmentationModel):
         decoder_channels: List[int] = (256, 128, 64, 32),
         decoder_attention_type: Optional[str] = None,
         in_channels: int = 3,
-        classes: int = 1,
+        unary_mid_channels: int = 4,
+        unary_out_channels: int = 1,
+        classes: int = 3,
         activation: Optional[Union[str, callable]] = None,
         aux_params: Optional[dict] = None,
     ):
-        super().__init__()
+        super(WeakUnet, self).__init__()
 
         self.encoder = get_encoder(
             encoder_name,
@@ -78,12 +85,78 @@ class Unet(SegmentationModel):
             kernel_size=3,
         )
 
-        if aux_params is not None:
-            self.classification_head = ClassificationHead(
-                in_channels=self.encoder.out_channels[-1], **aux_params
-            )
-        else:
-            self.classification_head = None
+        self.unary_head = UnaryHead(
+            in_channels=decoder_channels,
+            mid_channels=unary_mid_channels,
+            out_channels=unary_out_channels,
+            use_batchnorm=decoder_use_batchnorm,
+        )
 
-        self.name = "u-{}".format(encoder_name)
+        # self.fr = FillingRate(1)
+
+        self.name = "u-weak-{}".format(encoder_name)
         self.initialize()
+    
+    def initialize(self):
+        init.initialize_decoder(self.decoder)
+        init.initialize_decoder(self.unary_head)
+        init.initialize_head(self.segmentation_head)
+    
+
+    def forward(self, x):
+        """Sequentially pass `x` trough model`s encoder, decoder and heads"""
+        features = self.encoder(x)
+        outputs = self.decoder.extract_features(*features)
+        masks = self.segmentation_head(outputs[-1])
+        unary, fr = self.unary_head(outputs)
+
+        return masks, unary, fr
+    
+
+
+class UnaryHead(nn.Module):
+    def __init__(
+        self, 
+        in_channels,
+        mid_channels,
+        out_channels,
+        use_batchnorm=True
+    ):
+        super(UnaryHead, self).__init__()
+        self.use_batchnorm = use_batchnorm
+        self.smooth = self.get_smooth_layers(in_channels, mid_channels)
+        self.conv = md.Conv2dReLU(len(in_channels)*mid_channels, mid_channels, 3, 1, use_batchnorm=self.use_batchnorm)
+        self.unary = nn.Sequential(
+            nn.Conv2d(mid_channels, out_channels, 3, 1, 1),
+            nn.Sigmoid(),
+        )
+        self.pooling = nn.AdaptiveAvgPool2d((1,1))
+        self.fr = nn.Sequential(
+            nn.Linear(mid_channels, out_channels, bias=True),
+            nn.Sigmoid(),
+        )
+    
+    def get_smooth_layers(self, in_channels, mid_channels):
+        blocks = []
+        for in_channel in in_channels:
+            blocks.append(md.Conv2dReLU(in_channel, mid_channels, 1, use_batchnorm=self.use_batchnorm))
+        return nn.ModuleList(blocks)
+    
+    def forward(self, features):
+        _, _, h, w = features[-1].size() 
+        feat = []
+        for i, feature in enumerate(features):
+            x = self.smooth[i](feature)
+            x = F.interpolate(x, size=[h, w], mode='nearest')
+            feat.append(x)
+        feat = torch.cat(feat, dim=1)
+        feat = self.conv(feat)
+
+        unary = self.unary(feat)
+        fr = self.pooling(feat)
+        fr = torch.flatten(fr, 1)
+        fr = self.fr(fr)
+        return unary, fr
+
+
+
