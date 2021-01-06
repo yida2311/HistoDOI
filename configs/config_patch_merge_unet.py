@@ -65,7 +65,7 @@ class Config:
         }
 
         # task name
-        self.task_name = "-".join([self.model, self.mode, self.encoder, self.loss, self.scheduler, str(self.lr), str(self.num_epochs), simple_time()])
+        self.task_name = "-".join([self.model, self.mode, self.encoder, self.loss, str(self.lr), str(self.num_epochs), simple_time()])
         if train:
             self.task_name += "-" + "train"
         else:

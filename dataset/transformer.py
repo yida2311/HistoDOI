@@ -88,14 +88,6 @@ class TransformerMergeVal:
         return result
 
 
-
-
-
-
-
-
-
-
 class TransformerGL:
     def __init__(self, crop_size=1024):
         self.master = albumentations.Compose([
