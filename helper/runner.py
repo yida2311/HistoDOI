@@ -110,7 +110,7 @@ class Runner:
 
         # log
         if self.local_rank == 0:
-            f_log = open(self.cfg.log_path + ".log", 'w')
+            f_log = open(self.cfg.log_path + self.cfg.task_name + ".log", 'w')
             log = self.cfg.task_name + '\n'
             for k, v in self.cfg.__dict__.items():
                 log += str(k) + ' = ' + str(v) + '\n'
@@ -138,6 +138,7 @@ class Runner:
                     loss = trainer.train(sample, model)
                 else:
                     loss = trainer.train_acc(sample, model, i_batch, 2, num_batch)
+                
                 train_loss += loss.item()
                 scores_train = trainer.get_scores()
 
@@ -170,7 +171,7 @@ class Runner:
                                         (scores_val["iou_mean"], data_time.avg, batch_time.avg))
 
                         if val_vis and epoch % 5 == 0: # val set result visualize
-                            for i in range(self.cfg.batch_size):
+                            for i in range(len(sample['id'])):
                                 name = sample['id'][i] + '.png'
                                 slide = name.split('_')[0] 
                                 slide_dir = os.path.join(self.cfg.output_path, slide)
@@ -234,7 +235,7 @@ class Runner:
         
         model = self.model_loader(self.model, device=self.device, evaluation=True, ckpt_path=self.cfg.ckpt_path)
         model = model.cuda()
-        f_log = open(self.cfg.log_path +  "_slide_test.log", 'w')
+        f_log = open(self.cfg.log_path + self.cfg.task_name +  "_slide_test.log", 'w')
         #######################################
         evaluator = evaluator_func(self.cfg.n_class, self.cfg.num_workers, self.cfg.batch_size)
         num_slides = len(dataset.slides)

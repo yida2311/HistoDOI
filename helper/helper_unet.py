@@ -118,19 +118,24 @@ class Trainer(object):
         imgs = imgs.cuda()
         masks_npy = np.array(masks)
         masks = masks.cuda()
-
+        
         preds = model.forward(imgs)
         preds = F.interpolate(preds, size=(masks.size(1), masks.size(2)), mode='bilinear')
-        loss = self.criterion(preds, masks) / acc_step
-        loss.backward()
+        try:
+            loss = self.criterion(preds, masks) / acc_step
+            loss.backward()
 
-        if i%acc_step == 0 or i==maxLen-1:
-            self.optimizer.step()
-            self.optimizer.zero_grad()
+            if i%acc_step == 0 or i==maxLen-1:
+                self.optimizer.step()
+                self.optimizer.zero_grad()
 
-        outputs = preds.cpu().detach().numpy()
-        predictions = np.argmax(outputs, axis=1)
-        self.metrics.update(masks_npy, predictions)
+            outputs = preds.cpu().detach().numpy()
+            predictions = np.argmax(outputs, axis=1)
+            self.metrics.update(masks_npy, predictions)
+        except:
+            for i in range(imgs.size(0)):
+                print(sample['id'])
+                print(masks[i])
         
         return loss
     
