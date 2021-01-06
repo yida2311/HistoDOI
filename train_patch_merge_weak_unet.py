@@ -3,7 +3,7 @@ import torch
 import torch.nn as nn
 
 
-from helper.runner import argParser, seed_everything, Runner
+from helper.runner_weak import argParser, seed_everything, Runner
 from dataset.dataset import OralDataset, collate
 from utils.seg_loss import *
 from helper.helper_weak_unet import Trainer, Evaluator, save_ckpt_model, update_log, update_writer, get_optimizer, create_model_load_weights

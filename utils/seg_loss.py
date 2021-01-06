@@ -49,15 +49,17 @@ class FRSegLoss(nn.Module):
         targets_bin = targets_bin.clone().float().cuda()
         unarys_bin = unarys * targets_bin #　focused unarys
         num_unary = torch.sum(targets_bin, dim=(2, 3)) # b x (1/2)
-        filling_rates =  frs * h * w  / (num_unary+10)
-        filling_rates = torch.clamp(self.momentum * filling_rates + (1-self.momentum) * old_frs, max=1)
+        filling_rates =  torch.clamp(frs * h * w  / (num_unary+10), max=1)
+        filling_rates = self.momentum * filling_rates + (1-self.momentum) * old_frs
         topk = (filling_rates * num_unary).clone().detach()
 
         topk_term = self.topk_seg_loss(inputs, targets, unarys_bin, topk, num_unary)
         unary_term = self.unary_loss(unarys, targets_bin)
         fr_term = torch.mean(filling_rates)
-
-        loss = topk_term + self.alpha * unary_term + self.beta * fr_term
+        # print("topk: ",  topk_term)
+        # print("unary: ", unary_term)
+        # print("fr: ", fr_term)
+        loss = topk_term + self.alpha * unary_term - self.beta * fr_term
         return loss, filling_rates
 
 
@@ -94,7 +96,7 @@ class TopKSegLoss(nn.Module):
                         anchor = inputs[i].view(1, c, -1)[:, :, indices]
                         targets_fg = targets[i].view(1, -1)[:, indices]
                         loss_fg += self.ce(anchor, targets_fg)
-        loss_fg /= torch.sum(topk)
+        loss_fg /= torch.sum(topk) + 1
 
         return (loss_bg + loss_fg)/2
 

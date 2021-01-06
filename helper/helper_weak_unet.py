@@ -154,6 +154,7 @@ class Evaluator(object):
     def __init__(self, n_class):
         self.metrics = ConfusionMatrixSeg(n_class)
         self.n_class = n_class
+        self.fr_dict = {}  # dict that contains filling rate of images
 
     def get_scores(self):
         score_train = self.metrics.get_scores()
@@ -161,6 +162,20 @@ class Evaluator(object):
     
     def reset_metrics(self):
         self.metrics.reset()
+
+    def update_fr(self, frs, masks, ids):
+        b, h, w = masks.size()
+        if self.n_class == 3:
+            masks_bin = torch.stack([masks==2], dim=1)
+        else:
+            masks_bin = torch.stack([masks==2, masks==3], dim=1)
+        num_unary = torch.sum(masks_bin, dim=(2,3))
+        frs = frs * h * w / (num_unary+10)
+        frs = torch.clamp(frs, max=1)
+
+        for i, id in enumerate(ids):
+            self.fr_dict[id] = list(frs[i])
+
     
     def eval(self, sample, model):
         imgs = sample['image']
@@ -169,12 +184,13 @@ class Evaluator(object):
             imgs = imgs.cuda()
             masks_npy = np.array(masks)
 
-            preds, _ = model.forward(imgs)
+            preds, _, frs = model.forward(imgs)
             preds = F.interpolate(preds, size=(masks.size(1), masks.size(2)), mode='bilinear')
             outputs = preds.cpu().detach().numpy()
             predictions = np.argmax(outputs, axis=1)
 
             self.metrics.update(masks_npy, predictions)
+            self.update_fr(frs.cpu(), masks, sample['id'])
         
         return predictions
     
