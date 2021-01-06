@@ -5,7 +5,7 @@ class Config:
         # model config
         self.model = "unet"
         self.encoder = "resnet34"  
-        self.n_class = 4
+        self.n_class = 3
         self.model_cfg = {
             'encoder_depth': 5,
             'encoder_weights': 'imagenet',
@@ -21,13 +21,13 @@ class Config:
         self.trainset_cfg = {
             "img_dir": root + "patch/",
             "mask_dir": root + "std_mask/",
-            "meta_file": root + "train_global.csv",
+            "meta_file": root + "train_local.csv",
             "label": True,
         }
         self.valset_cfg = {
             "img_dir": root +  "patch/",
             "mask_dir": root + "std_mask/",
-            "meta_file": root + "val_global.csv",
+            "meta_file": root + "val_local.csv",
             "label": True,
         }
         self.slideset_cfg = {  # for slide level inference

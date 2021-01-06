@@ -5,7 +5,7 @@ class Config:
         # model config
         self.model = "unet"
         self.encoder = "resnet34"  
-        self.n_class = 4
+        self.n_class = 3
         self.model_cfg = {
             'encoder_depth': 5,
             'encoder_weights': 'imagenet',

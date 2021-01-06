@@ -21,13 +21,13 @@ class Config:
         self.trainset_cfg = {
             "img_dir": root + "patch/",
             "mask_dir": root + "std_mask/",
-            "meta_file": root + "train_global.csv",
+            "meta_file": root + "train_local.csv",
             "label": True,
         }
         self.valset_cfg = {
             "img_dir": root +  "patch/",
             "mask_dir": root + "std_mask/",
-            "meta_file": root + "val_global.csv",
+            "meta_file": root + "val_local.csv",
             "label": True,
         }
         self.slideset_cfg = {  # for slide level inference
