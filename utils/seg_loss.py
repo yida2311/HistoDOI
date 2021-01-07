@@ -74,16 +74,16 @@ class TopKSegLoss(nn.Module):
     
     def forward(self, inputs, targets, unarys, topk, num_unary):
         b, c, h, w = inputs.size()
-        targets_bg = targets 
-        targets_bg[targets_bg==2] = - 1
-        if self.num_classes != 3:
-            targets_bg[targets_bg==3] = -1
-        loss_bg = self.ce(inputs, targets) / (b*h*w - torch.sum(num_unary) + 1)
+        targets_bg = targets.view(-1)
+        inputs_bg = inputs.permute(0, 2, 3, 1).contiguous().view(-1, c)
+        bg_mask = (targets_bg==0) + (targets_bg==1)
+        
+        loss_bg = self.ce(inputs_bg[bg_mask], targets_bg[bg_mask]) / (b*h*w - torch.sum(num_unary) + 1)
 
         loss_fg = 0
         if self.num_classes == 3:
             for i in range(b):
-                if topk[i] > 0:
+                if topk[i] >= 1:
                     _, indices = torch.topk(unarys[i].view(-1), int(topk[i]))
                     anchor = inputs[i].view(1, c, -1)[:, :, indices]
                     targets_fg = targets[i].view(1, -1)[:, indices]
@@ -91,7 +91,7 @@ class TopKSegLoss(nn.Module):
         else:
             for i in ranage(b):
                 for j in range(2):
-                    if topk[i][j] > 0:
+                    if topk[i][j] >= 1:
                         _, indices = torch.topk(unarys[i][j].view(-1), int(topk[i][j]))
                         anchor = inputs[i].view(1, c, -1)[:, :, indices]
                         targets_fg = targets[i].view(1, -1)[:, indices]
