@@ -65,7 +65,7 @@ class Config:
             },
             "fr": {
                 "alpha": 1.0,
-                "beta": 0.1,
+                "beta": 0.01,
                 "momentum": 0.1,
             }
         }

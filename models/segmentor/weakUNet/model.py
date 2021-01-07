@@ -125,11 +125,12 @@ class UnaryHead(nn.Module):
         super(UnaryHead, self).__init__()
         self.use_batchnorm = use_batchnorm
         self.smooth = self.get_smooth_layers(in_channels, mid_channels)
-        self.conv = md.Conv2dReLU(len(in_channels)*mid_channels, mid_channels, 3, 1, use_batchnorm=self.use_batchnorm)
+        self.conv1 = md.Conv2dReLU(len(in_channels)*mid_channels, mid_channels, 3, 1, use_batchnorm=self.use_batchnorm)
         self.unary = nn.Sequential(
             nn.Conv2d(mid_channels, out_channels, 3, 1, 1),
             nn.Sigmoid(),
         )
+        self.conv2 = nn.Conv2d(mid_channels, mid_channels, 1, 1)
         self.pooling = nn.AdaptiveAvgPool2d((1,1))
         self.fr = nn.Sequential(
             nn.Linear(mid_channels, out_channels, bias=True),
@@ -150,10 +151,12 @@ class UnaryHead(nn.Module):
             x = F.interpolate(x, size=[h, w], mode='nearest')
             feat.append(x)
         feat = torch.cat(feat, dim=1)
-        feat = self.conv(feat)
+        feat = self.conv1(feat)
 
         unary = self.unary(feat)
-        fr = self.pooling(feat)
+        
+        fr = self.conv2(feat) * unary
+        fr = self.pooling(fr)
         fr = torch.flatten(fr, 1)
         fr = self.fr(fr)
         return unary, fr

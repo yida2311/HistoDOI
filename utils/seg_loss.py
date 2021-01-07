@@ -49,8 +49,7 @@ class FRSegLoss(nn.Module):
         targets_bin = targets_bin.clone().float().cuda()
         unarys_bin = unarys * targets_bin #　focused unarys
         num_unary = torch.sum(targets_bin, dim=(2, 3)) # b x (1/2)
-        filling_rates =  torch.clamp(frs * h * w  / (num_unary+10), max=1)
-        filling_rates = self.momentum * filling_rates + (1-self.momentum) * old_frs
+        filling_rates = self.momentum * frs + (1-self.momentum) * old_frs
         topk = (filling_rates * num_unary).clone().detach()
 
         topk_term = self.topk_seg_loss(inputs, targets, unarys_bin, topk, num_unary)
