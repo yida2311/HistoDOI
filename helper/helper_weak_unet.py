@@ -19,7 +19,7 @@ def save_ckpt_model(model, cfg, scores, best_pred, epoch):
     return best_pred
 
 
-def update_log(f_log, cfg, scores_train, scores_val, epoch):
+def update_log(f_log, cfg, scores_train, scores_val, train_fr, val_fr epoch):
     log = ""
     log = log + 'epoch [{}/{}] mIoU: train = {:.4f}, val = {:.4f}'.format(epoch+1, cfg.num_epochs, scores_train['iou_mean'], scores_val['iou_mean']) + "\n"
     log = log + "[train] IoU = " + str(scores_train['iou']) + "\n"
@@ -27,12 +27,16 @@ def update_log(f_log, cfg, scores_train, scores_val, epoch):
     log = log + "[train] Dice_mean = " + str(scores_train['dice_mean']) + "\n"
     log = log + "[train] Accuracy = " + str(scores_train['accuracy'])  + "\n"
     log = log + "[train] Accuracy_mean = " + str(scores_train['accuracy_mean'])  + "\n"
+    log = log + "[train] Model_FR = " + str(train_fr[0]) + "\n"
+    log = log + "[train] Seg_FR = " + str(train_fr[1]) + "\n"
     log = log + "------------------------------------ \n"
     log = log + "[val] IoU = " + str(scores_val['iou']) + "\n"
     log = log + "[val] Dice = " + str(scores_val['dice']) + "\n"
     log = log + "[val] Dice_mean = " + str(scores_val['dice_mean']) + "\n"
     log = log + "[val] Accuracy = " + str(scores_val['accuracy'])  + "\n"
     log = log + "[val] Accuracy_mean = " + str(scores_val['accuracy_mean'])  + "\n"
+    log = log + "[val] Model_FR = " + str(val_fr[0]) + "\n"
+    log = log + "[val] Seg_FR = " + str(val_fr[1]) + "\n"
     log += "================================\n"
     print(log)
     f_log.write(log)
@@ -74,6 +78,16 @@ def get_optimizer(model, learning_rate=2e-5):
     return optimizer
 
 
+def calcuate_seg_fr(inputs, masks, n_class):
+    labels = [2] if n_class == 3 else [2,3]
+    fr = []
+    for i in labels:
+        inputs_bin = inputs == i
+        masks_bin = masks == i
+        fr.append((np.sum(inputs_bin * masks_bin, axis=(1, 2)) + 1) / (np.sum(masks_bin, axis=(1,2)) + 1))
+    return np.column_stack(fr)
+
+
 #============================================================================================================================
 #============================================================================================================================
 class Trainer(object):
@@ -82,7 +96,8 @@ class Trainer(object):
         self.optimizer = optimizer
         self.metrics = ConfusionMatrixSeg(n_class)
         self.n_class = n_class
-        self.fr_dict = {}  # dict that contains filling rate of images
+        self.model_fr_dict = {}  # dict that contains filling rate of images
+        self.seg_fr_dict = {}
 
     def get_scores(self):
         score_train = self.metrics.get_scores()
@@ -91,9 +106,22 @@ class Trainer(object):
     def reset_metrics(self):
         self.metrics.reset()
 
-    def update_fr(self, new_frs, ids):
+    def update_model_fr(self, new_frs, ids):
         for i, id in enumerate(ids):
-            self.fr_dict[id] = list(new_frs[i])
+            self.model_fr_dict[id] = list(new_frs[i])
+    
+    def update_seg_fr(self, preds, masks, ids):
+        frs = calcuate_seg_fr(preds, masks, self.n_class)
+        for i, id in enumerate(ids):
+            self.seg_fr_dict[id] = list(frs[i])
+    
+    def calculate_avg_fr(self):
+        model_frs = list(self.model_fr_dict.values())
+        seg_frs = list(self.seg_fr_dict.values())
+        avg_model_fr = np.sum(np.array(model_frs), axis=0) / len(model_frs)
+        avg_seg_fr = np.sum(np.array(seg_frs), axis=0) / len(seg_frs)
+        
+        return avg_model_fr, avg_seg_fr
     
     def train(self, sample, model):
         model.train()
@@ -117,7 +145,8 @@ class Trainer(object):
         outputs = preds.cpu().detach().numpy()
         predictions = np.argmax(outputs, axis=1)
         self.metrics.update(masks_npy, predictions)
-        self.update_fr(new_frs, sample['id'])
+        self.update_model_fr(new_frs, sample['id'])
+        self.update_seg_fr(predictions, masks_npy, sample['id'])
         
         return loss
     
@@ -154,7 +183,8 @@ class Evaluator(object):
     def __init__(self, n_class):
         self.metrics = ConfusionMatrixSeg(n_class)
         self.n_class = n_class
-        self.fr_dict = {}  # dict that contains filling rate of images
+        self.model_fr_dict = {}  # dict that contains filling rate of images
+        self.seg_fr_dict = {}
 
     def get_scores(self):
         score_train = self.metrics.get_scores()
@@ -162,19 +192,23 @@ class Evaluator(object):
     
     def reset_metrics(self):
         self.metrics.reset()
-
-    def update_fr(self, frs, masks, ids):
-        b, h, w = masks.size()
-        if self.n_class == 3:
-            masks_bin = torch.stack([masks==2], dim=1)
-        else:
-            masks_bin = torch.stack([masks==2, masks==3], dim=1)
-        num_unary = torch.sum(masks_bin, dim=(2,3))
-        frs = frs * h * w / (num_unary+10)
-        frs = torch.clamp(frs, max=1)
-
+    
+    def update_model_fr(self, new_frs, ids):
         for i, id in enumerate(ids):
-            self.fr_dict[id] = list(frs[i])
+            self.model_fr_dict[id] = list(new_frs[i])
+    
+    def update_seg_fr(self, preds, masks, ids):
+        frs = calcuate_seg_fr(preds, masks, self.n_class)
+        for i, id in enumerate(ids):
+            self.seg_fr_dict[id] = list(frs[i])
+    
+    def calculate_avg_fr(self):
+        model_frs = list(self.model_fr_dict.values())
+        seg_frs = list(self.seg_fr_dict.values())
+        avg_model_fr = np.sum(np.array(model_frs), axis=0) / len(model_frs)
+        avg_seg_fr = np.sum(np.array(seg_frs), axis=0) / len(seg_frs)
+        
+        return avg_model_fr, avg_seg_fr
 
     
     def eval(self, sample, model):
@@ -190,7 +224,8 @@ class Evaluator(object):
             predictions = np.argmax(outputs, axis=1)
 
             self.metrics.update(masks_npy, predictions)
-            self.update_fr(frs.cpu(), masks, sample['id'])
+            self.update_model_fr(frs.cpu(), sample['id'])
+            self.update_seg_fr(predictions, masks_npy, sample['id'])
         
         return predictions
     

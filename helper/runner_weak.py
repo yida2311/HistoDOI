@@ -153,8 +153,7 @@ class Runner:
             data_time.reset()
             batch_time.reset()
 
-            train_fr_values = list(trainer.fr_dict.values())
-            train_fr = np.sum(np.array(train_fr_values), axis=0) / len(train_fr_values)
+            train_model_fr, train_seg_fr = trainer.calculate_avg_fr()
 
             if evaluation and epoch % 1 == 0 and self.local_rank == 0:
                 with torch.no_grad():
@@ -192,13 +191,12 @@ class Runner:
                     scores_val = evaluator.get_scores()
                     evaluator.reset_metrics()
 
-                    val_fr_values = list(evaluator.fr_dict.values())
-                    val_fr = np.sum(np.array(val_fr_values), axis=0) / len(val_fr_values)
+                    val_model_fr, val_seg_fr = evaluator.calculate_avg_fr()
 
                     # save model
                     best_pred = save_ckpt_model(model, self.cfg, scores_val, best_pred, epoch)
                     # log 
-                    update_log(f_log, self.cfg, scores_train, scores_val, epoch)   
+                    update_log(f_log, self.cfg, scores_train, scores_val, [train_model_fr, train_seg_fr], [val_model_fr, val_seg_fr], epoch)   
                     # writer\
                     if self.cfg.n_class == 4:
                         writer_info.update(
@@ -216,13 +214,21 @@ class Runner:
                                 "train": scores_train["iou"][3],
                                 "val": scores_val["iou"][3],
                             },
-                            mucosa_fr={
-                                "train": train_fr[0],
-                                "val": val_fr[0],
+                            mucosa_model_fr={
+                                "train": train_model_fr[0],
+                                "val": val_model_fr[0],
                             },
-                            tumor_fr={
-                                "train": train_fr[1],
-                                "val": val_fr[1],
+                            tumor_model_fr={
+                                "train": train_model_fr[1],
+                                "val": val_model_fr[1],
+                            },
+                            mucosa_seg_fr={
+                                "train": train_seg_fr[0],
+                                "val": val_seg_fr[0],
+                            },
+                            tumor_seg_fr={
+                                "train": train_seg_fr[1],
+                                "val": val_seg_fr[1],
                             }
                         )
                     else:
@@ -237,9 +243,13 @@ class Runner:
                                 "train": scores_train["iou"][2],
                                 "val": scores_val["iou"][2],
                             },
-                            merge_fr={
-                                "train": train_fr[0],
-                                "val": val_fr[0],
+                            merge_model_fr={
+                                "train": train_model_fr[0],
+                                "val": val_model_fr[0],
+                            }
+                            merge_seg_fr={
+                                "train": train_seg_fr[0],
+                                "val": val_seg_fr[0],
                             }
                         )
                     update_writer(writer, writer_info, epoch)
