@@ -148,7 +148,7 @@ class Runner:
                 if i_batch % 20 == 0 and self.local_rank == 0:
                     tbar.set_description('Train loss: %.4f; mIoU: %.4f; data time: %.2f; batch time: %.2f' % 
                                 (train_loss / (i_batch + 1), scores_train["iou_mean"], data_time.avg, batch_time.avg))
-                
+                # break
             trainer.reset_metrics()
             data_time.reset()
             batch_time.reset()
@@ -184,7 +184,7 @@ class Runner:
                                 cv2.imwrite(os.path.join(slide_dir, name), predictions_rgb)
                                 # writer_info.update(mask=mask_rgb, prediction=predictions_rgb)
                         start_time = time.time()
-            
+                        # break
                     
                     data_time.reset()
                     batch_time.reset()
@@ -246,7 +246,7 @@ class Runner:
                             merge_model_fr={
                                 "train": train_model_fr[0],
                                 "val": val_model_fr[0],
-                            }
+                            },
                             merge_seg_fr={
                                 "train": train_seg_fr[0],
                                 "val": val_seg_fr[0],

@@ -19,7 +19,7 @@ def save_ckpt_model(model, cfg, scores, best_pred, epoch):
     return best_pred
 
 
-def update_log(f_log, cfg, scores_train, scores_val, train_fr, val_fr epoch):
+def update_log(f_log, cfg, scores_train, scores_val, train_fr, val_fr, epoch):
     log = ""
     log = log + 'epoch [{}/{}] mIoU: train = {:.4f}, val = {:.4f}'.format(epoch+1, cfg.num_epochs, scores_train['iou_mean'], scores_val['iou_mean']) + "\n"
     log = log + "[train] IoU = " + str(scores_train['iou']) + "\n"
@@ -127,7 +127,7 @@ class Trainer(object):
         model.train()
         imgs = sample['image']
         masks = sample['mask'].squeeze(1)
-        old_frs = [self.fr_dict.get(c, [0.1]*(self.n_class-2)) for c in sample['id']]
+        old_frs = [self.model_fr_dict.get(c, [0.1]*(self.n_class-2)) for c in sample['id']]
         old_frs = torch.tensor(old_frs, dtype=torch.float)
         
         imgs = imgs.cuda()
@@ -153,7 +153,7 @@ class Trainer(object):
     def train_acc(self, sample, model, i, acc_step, maxLen):
         imgs = sample['image']
         masks = sample['mask'].squeeze(1)
-        old_frs = [self.fr_dict.get(c, [0.1]*(self.n_class-2)) for c in sample['id']]
+        old_frs = [self.model_fr_dict.get(c, [0.1]*(self.n_class-2)) for c in sample['id']]
         old_frs = torch.tensor(old_frs, dtype=torch.float)
 
         imgs = imgs.cuda()
@@ -174,7 +174,8 @@ class Trainer(object):
         outputs = preds.cpu().detach().numpy()
         predictions = np.argmax(outputs, axis=1)
         self.metrics.update(masks_npy, predictions)
-        self.update_fr(new_frs, sample['id'])
+        self.update_model_fr(new_frs, sample['id'])
+        self.update_seg_fr(predictions, masks_npy, sample['id'])
 
         return loss
     
