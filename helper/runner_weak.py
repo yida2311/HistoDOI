@@ -1,4 +1,4 @@
-import os
+-import os
 import time
 import random
 import cv2
@@ -63,8 +63,10 @@ class Runner:
                 os.makedirs(cfg.log_path)
             if not os.path.exists(cfg.writer_path):
                 os.makedirs(cfg.writer_path)
-            if not os.path.exists(cfg.output_path): 
-                os.makedirs(cfg.output_path)
+            if not os.path.exists(cfg.val_output_path): 
+                os.makedirs(cfg.val_output_path)
+            if not os.path.exists(cfg.test_output_path): 
+                os.makedirs(cfg.test_output_path)
 
         print(cfg.task_name)
         self.cfg = cfg
@@ -80,14 +82,17 @@ class Runner:
             optimizer_func, 
             trainer_func, 
             evaluator_func, 
-            collate):
+            collate,
+            dataset_test=None,
+            tester_func=None):
         if self.distributed:
             sampler_train = DistributedSampler(dataset_train, shuffle=True)
             dataloader_train = DataLoader(dataset_train, num_workers=self.cfg.num_workers, batch_size=self.cfg.batch_size, collate_fn=collate, sampler=sampler_train, pin_memory=True)
         else:
             dataloader_train = DataLoader(dataset_train, num_workers=self.cfg.num_workers, batch_size=self.cfg.batch_size, collate_fn=collate, shuffle=True, pin_memory=True)
         dataloader_val = DataLoader(dataset_val, num_workers=self.cfg.num_workers, batch_size=self.cfg.batch_size, collate_fn=collate, shuffle=False, pin_memory=True)
-
+        # if dataset_test:
+        #     dataloader_test = DataLoader(dataset_test, num_workers=self.cfg.num_workers, batch_size=self.cfg.batch_size, collate_fn=collate, shuffle=False, pin_memory=True)
         ###################################
         print("creating models......")
         model = self.model_loader(self.model, self.device, distributed=self.distributed, local_rank=self.local_rank, evaluation=True, ckpt_path=self.cfg.ckpt_path)
@@ -103,6 +108,9 @@ class Runner:
         ##################################
         trainer = trainer_func(criterion, optimizer, self.cfg.n_class)
         evaluator = evaluator_func(self.cfg.n_class)
+        if tester_func:
+            tester = tester_func(self.cfg.n_class)
+
         evaluation = self.cfg.evaluation
         val_vis = self.cfg.val_vis
         best_pred = 0.0
@@ -158,9 +166,10 @@ class Runner:
             if evaluation and epoch % 1 == 0 and self.local_rank == 0:
                 with torch.no_grad():
                     model.eval()
+
+                    ##--** evaluating **--
                     print("evaluating...")
                     tbar = tqdm(dataloader_val)
-
                     start_time = time.time()
                     for i_batch, sample in enumerate(tbar):
                         data_time.update(time.time()-start_time)
@@ -176,7 +185,7 @@ class Runner:
                             for i in range(len(sample['id'])):
                                 name = sample['id'][i] + '.png'
                                 slide = name.split('_')[0] 
-                                slide_dir = os.path.join(self.cfg.output_path, slide)
+                                slide_dir = os.path.join(self.cfg.val_output_path, slide)
                                 if not os.path.exists(slide_dir):
                                     os.makedirs(slide_dir)
                                 predictions_rgb = class_to_RGB(predictions[i])
@@ -185,18 +194,46 @@ class Runner:
                                 # writer_info.update(mask=mask_rgb, prediction=predictions_rgb)
                         start_time = time.time()
                         # break
-                    
                     data_time.reset()
                     batch_time.reset()
                     scores_val = evaluator.get_scores()
                     evaluator.reset_metrics()
 
                     val_model_fr, val_seg_fr = evaluator.calculate_avg_fr()
+                    
+                    ##--** testing **--
+                    if dataset_test:
+                        print("testing...")
+                        num_slides = len(dataset_test.slides)
+                        tbar2 = tqdm(range(num_slides))
+                        start_time = time.time()
+                        for i in tbar2:
+                            dataset_test.get_patches_from_index(i)
+                            data_time.update(time.time()-start_time)
+                            predictions, output, _ = tester.inference(dataset_test, model)
+                            mask  =dataset_test.get_slide_mask_from_index(i)
+                            tester.update_scores(mask, predictions)
+                            scores_test = tester.get_scores()
+                            batch_time.update(time.time()-start_time)
+                            tbar2.set_description('mIoU: %.4f; data time: %.2f; slide time: %.2f' % 
+                                            (scores_test["iou_mean"], data_time.avg, batch_time.avg))
+
+                            output = cv2.cvtColor(output, cv2.COLOR_BGR2RGB)
+                            cv2.imwrite(os.path.join(self.cfg.test_output_path, dataset_test.slide+'.png'), output)
+                            # writer_info.update(mask=mask_rgb, prediction=predictions_rgb)
+                            start_time = time.time()
+                            # break
+                        data_time.reset()
+                        batch_time.reset()
+                        scores_test = tester.get_scores()
+                        tester.reset_metrics()
+
+                        test_model_fr, test_seg_fr = tester.calculate_avg_fr()
 
                     # save model
                     best_pred = save_ckpt_model(model, self.cfg, scores_val, best_pred, epoch)
                     # log 
-                    update_log(f_log, self.cfg, scores_train, scores_val, [train_model_fr, train_seg_fr], [val_model_fr, val_seg_fr], epoch)   
+                    update_log(f_log, self.cfg, scores_train, scores_val, [train_model_fr, train_seg_fr], [val_model_fr, val_seg_fr], epoch, scores_test=scores_test, test_fr=[test_model_fr, test_seg_fr])   
                     # writer\
                     if self.cfg.n_class == 4:
                         writer_info.update(
@@ -205,30 +242,37 @@ class Runner:
                             mIOU={
                                 "train": scores_train["iou_mean"],
                                 "val": scores_val["iou_mean"],
+                                "test": scores_test["iou_mean"],
                             },
                             mucosa_iou={
                                 "train": scores_train["iou"][2],
                                 "val": scores_val["iou"][2],
+                                "test": scores_test["iou"][2],
                             },
                             tumor_iou={
                                 "train": scores_train["iou"][3],
                                 "val": scores_val["iou"][3],
+                                "test": scores_test["iou"][3],
                             },
                             mucosa_model_fr={
                                 "train": train_model_fr[0],
                                 "val": val_model_fr[0],
+                                "test": test_model_fr[0],
                             },
                             tumor_model_fr={
                                 "train": train_model_fr[1],
                                 "val": val_model_fr[1],
+                                "test": val_model_fr[1],
                             },
                             mucosa_seg_fr={
                                 "train": train_seg_fr[0],
                                 "val": val_seg_fr[0],
+                                "test": test_seg_fr[0],
                             },
                             tumor_seg_fr={
                                 "train": train_seg_fr[1],
                                 "val": val_seg_fr[1],
+                                "test": test_seg_fr[1],
                             }
                         )
                     else:
@@ -238,18 +282,22 @@ class Runner:
                             mIOU={
                                 "train": scores_train["iou_mean"],
                                 "val": scores_val["iou_mean"],
+                                "test": scores_test["iou_mean"],
                             },
                             merge_iou={
                                 "train": scores_train["iou"][2],
                                 "val": scores_val["iou"][2],
+                                "test": scores_test["iou"][2],
                             },
                             merge_model_fr={
                                 "train": train_model_fr[0],
                                 "val": val_model_fr[0],
+                                "test": test_model_fr[0],
                             },
                             merge_seg_fr={
                                 "train": train_seg_fr[0],
                                 "val": val_seg_fr[0],
+                                "test": val_seg_fr[0],
                             }
                         )
                     update_writer(writer, writer_info, epoch)
@@ -257,7 +305,7 @@ class Runner:
             f_log.close()
         
     
-    def eval_slide(self, dataset, evaluator_func):
+    def eval_slide(self, dataset, evaluator_func, output_path):
         print("preparing datasets and dataloaders......")
         evaluation = self.cfg.slideset_cfg["label"]
         slide_time = AverageMeter("DataTime", ':3.3f')
@@ -275,7 +323,7 @@ class Runner:
             dataset.get_patches_from_index(i)
             prediction, output, _ = evaluator.inference(dataset, model)
             output = cv2.cvtColor(output, cv2.COLOR_BGR2RGB)
-            cv2.imwrite(os.path.join(self.cfg.output_path, dataset.slide+'.png'), output)
+            cv2.imwrite(os.path.join(output_path, dataset.slide+'.png'), output)
             slide_time.update(time.time()-start_time)
         
             if evaluation:
@@ -291,7 +339,7 @@ class Runner:
             print(evaluator.metrics.confusion_matrix)
 
         log = ""
-        log = log + str(task_name) + '   slide inference \n'
+        log = log + str(task_name) + '  slide inference \n'
         if evaluation:
             log = log + "mIOU = " + str(scores['iou_mean']) + '\n'
             log = log + "IOU: " + str(scores['iou']) + '\n'

@@ -5,6 +5,7 @@ import torch.nn as nn
 
 from helper.runner_weak import argParser, seed_everything, Runner
 from dataset.dataset_local import OralDatasetLocal, collate
+from dataset.dataset import OralSlide
 from utils.seg_loss import *
 from helper.helper_weak_unet import Trainer, Evaluator, save_ckpt_model, update_log, update_writer, get_optimizer, create_model_load_weights
 from dataset.transformer import TransformerMerge, TransformerMergeVal
@@ -30,6 +31,7 @@ batch_size = cfg.batch_size
 num_workers = cfg.num_workers
 trainset_cfg = cfg.trainset_cfg
 valset_cfg = cfg.valset_cfg
+testset_cfg = cfg.testset_cfg
 
 transformer_train = TransformerMerge()
 dataset_train = OralDatasetLocal(
@@ -46,6 +48,16 @@ dataset_val = OralDatasetLocal(
     valset_cfg["meta_file"],
     label=valset_cfg["label"], 
     transform=transformer_val
+)
+transformer_test = TransformerMergeVal()
+slide_list = sorted(os.listdir(testset_cfg["img_dir"]))
+dataset_test = OralSlide(
+    slide_list,
+    testset_cfg["img_dir"],
+    testset_cfg["meta_file"],
+    slide_mask_dir=testset_cfg["mask_dir"],
+    label=testset_cfg["label"], 
+    transform=transformer_test,
 )
 
 if cfg.loss == "ce":
@@ -64,7 +76,15 @@ elif cfg.loss == 'decouple-v2':
 elif cfg.loss == 'fr':
     criterion = FRSegLoss(cfg.n_class, alpha=cfg.loss_cfg['fr']['alpha'], beta=cfg.loss_cfg['fr']['beta'], momentum=cfg.loss_cfg['fr']['momentum'], reduction='mean')
 
-runner.train(dataset_train, dataset_val, criterion, get_optimizer, Trainer, Evaluator, collate)
+runner.train(dataset_train, 
+            dataset_val, 
+            criterion, 
+            get_optimizer, 
+            Trainer, 
+            Evaluator, 
+            collate,
+            dataset_test=dataset_test,
+           tester_func=Evaluator)
 
 
 

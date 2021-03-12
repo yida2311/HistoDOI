@@ -32,6 +32,13 @@ class Config:
             "meta_file": root + "val_local.csv",
             "label": True,
         }
+        test_root = '/disk2/ldy/fine/5x_tile/5x_800/'
+        self.testset_cfg = {
+            "img_dir": root +  "patch/",
+            "mask_dir": root + "std_mask/",
+            "meta_file": root + "tile_info.json",
+            "label": True,
+        }
         self.slideset_cfg = {  # for slide level inference
             "img_dir": root + "patch/",
             "meta_file": root + "tile_info.json",
