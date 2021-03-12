@@ -109,7 +109,7 @@ class Runner:
         trainer = trainer_func(criterion, optimizer, self.cfg.n_class)
         evaluator = evaluator_func(self.cfg.n_class)
         if tester_func:
-            tester = tester_func(self.cfg.n_class)
+            tester = tester_func(self.cfg.n_class, self.cfg.num_workers, self.cfg.batch_size)
 
         evaluation = self.cfg.evaluation
         val_vis = self.cfg.val_vis

@@ -19,7 +19,7 @@ def save_ckpt_model(model, cfg, scores, best_pred, epoch):
     return best_pred
 
 
-def update_log(f_log, cfg, scores_train, scores_val, epoch):
+def update_log(f_log, cfg, scores_train, scores_val, epoch, scores_test=None):
     log = ""
     log = log + 'epoch [{}/{}] mIoU: train = {:.4f}, val = {:.4f}'.format(epoch+1, cfg.num_epochs, scores_train['iou_mean'], scores_val['iou_mean']) + "\n"
     log = log + "[train] IoU = " + str(scores_train['iou']) + "\n"
@@ -33,10 +33,19 @@ def update_log(f_log, cfg, scores_train, scores_val, epoch):
     log = log + "[val] Dice_mean = " + str(scores_val['dice_mean']) + "\n"
     log = log + "[val] Accuracy = " + str(scores_val['accuracy'])  + "\n"
     log = log + "[val] Accuracy_mean = " + str(scores_val['accuracy_mean'])  + "\n"
+    if scores_test and test_fr:
+        log = log + "------------------------------------ \n"
+        log = log + "[test] IoU = " + str(scores_test['iou']) + "\n"
+        log = log + "[test] Dice = " + str(scores_test['dice']) + "\n"
+        log = log + "[test] Dice_mean = " + str(scores_test['dice_mean']) + "\n"
+        log = log + "[test] Accuracy = " + str(scores_test['accuracy'])  + "\n"
+        log = log + "[test] Accuracy_mean = " + str(scores_test['accuracy_mean'])  + "\n"
+   
     log += "================================\n"
     print(log)
     f_log.write(log)
     f_log.flush()
+
 
 
 def update_writer(writer, writer_info, epoch):
@@ -85,8 +94,8 @@ class Trainer(object):
 
     def get_scores(self):
         score_train = self.metrics.get_scores()
-        
         return score_train
+        
     def reset_metrics(self):
         self.metrics.reset()
     

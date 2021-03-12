@@ -89,6 +89,6 @@ class Config:
         self.model_path = out_root + "saved_models/" + self.task_name
         self.log_path = out_root + "logs/" 
         self.writer_path = out_root + 'writers/' + self.task_name
-        self.output_path = out_root + "predictions/" + self.task_name
-
+        self.val_output_path = out_root + "predictions/" + self.task_name + '/val'
+        self.test_output_path = out_root + "predictions/" + self.task_name + '/test'
         

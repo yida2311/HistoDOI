@@ -30,6 +30,13 @@ class Config:
             "meta_file": root + "val_local.csv",
             "label": True,
         }
+        test_root = '/disk2/ldy/fine/5x_tile/5x_800/'
+        self.testset_cfg = {
+            "img_dir": root +  "patch/",
+            "mask_dir": root + "std_mask/",
+            "meta_file": root + "tile_info.json",
+            "label": True,
+        }
         self.slideset_cfg = {  # for slide level inference
             "img_dir": root + "patch/",
             "meta_file": root + "tile_info.json",
@@ -65,7 +72,7 @@ class Config:
         }
 
         # task name
-        self.task_name = "-".join([self.model, self.mode, self.encoder, self.loss, self.scheduler, str(self.lr), str(self.num_epochs), simple_time()])
+        self.task_name = "-".join([self.model, self.mode, self.encoder, self.loss, str(self.lr), str(self.num_epochs), simple_time()])
         if train:
             self.task_name += "-" + "train"
         else:
@@ -75,6 +82,7 @@ class Config:
         self.model_path = out_root + "saved_models/" + self.task_name
         self.log_path = out_root + "logs/" 
         self.writer_path = out_root + 'writers/' + self.task_name
-        self.output_path = out_root + "predictions/" + self.task_name
-
+        self.val_output_path = out_root + "predictions/" + self.task_name + '/val'
+        self.test_output_path = out_root + "predictions/" + self.task_name + '/test'
+        
         

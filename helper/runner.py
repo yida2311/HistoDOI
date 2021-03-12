@@ -63,8 +63,10 @@ class Runner:
                 os.makedirs(cfg.log_path)
             if not os.path.exists(cfg.writer_path):
                 os.makedirs(cfg.writer_path)
-            if not os.path.exists(cfg.output_path): 
-                os.makedirs(cfg.output_path)
+            if not os.path.exists(cfg.val_output_path): 
+                os.makedirs(cfg.val_output_path)
+            if not os.path.exists(cfg.test_output_path): 
+                os.makedirs(cfg.test_output_path)
 
         print(cfg.task_name)
         self.cfg = cfg
@@ -80,7 +82,9 @@ class Runner:
             optimizer_func, 
             trainer_func, 
             evaluator_func, 
-            collate):
+            collate,
+            dataset_test=None,
+            tester_func=None):
         if self.distributed:
             sampler_train = DistributedSampler(dataset_train, shuffle=True)
             dataloader_train = DataLoader(dataset_train, num_workers=self.cfg.num_workers, batch_size=self.cfg.batch_size, collate_fn=collate, sampler=sampler_train, pin_memory=True)
@@ -103,6 +107,9 @@ class Runner:
         ##################################
         trainer = trainer_func(criterion, optimizer, self.cfg.n_class)
         evaluator = evaluator_func(self.cfg.n_class)
+        if tester_func:
+            tester = tester_func(self.cfg.n_class, self.cfg.num_workers, self.cfg.batch_size)
+
         evaluation = self.cfg.evaluation
         val_vis = self.cfg.val_vis
         best_pred = 0.0
@@ -158,7 +165,6 @@ class Runner:
                     model.eval()
                     print("evaluating...")
                     tbar = tqdm(dataloader_val)
-
                     start_time = time.time()
                     for i_batch, sample in enumerate(tbar):
                         data_time.update(time.time()-start_time)
@@ -187,6 +193,33 @@ class Runner:
                     batch_time.reset()
                     scores_val = evaluator.get_scores()
                     evaluator.reset_metrics()
+                    
+                    ##--** testing **--
+                    if dataset_test:
+                        print("testing...")
+                        num_slides = len(dataset_test.slides)
+                        tbar2 = tqdm(range(num_slides))
+                        start_time = time.time()
+                        for i in tbar2:
+                            dataset_test.get_patches_from_index(i)
+                            data_time.update(time.time()-start_time)
+                            predictions, output, _ = tester.inference(dataset_test, model)
+                            mask  =dataset_test.get_slide_mask_from_index(i)
+                            tester.update_scores(mask, predictions)
+                            scores_test = tester.get_scores()
+                            batch_time.update(time.time()-start_time)
+                            tbar2.set_description('mIoU: %.4f; data time: %.2f; slide time: %.2f' % 
+                                            (scores_test["iou_mean"], data_time.avg, batch_time.avg))
+
+                            output = cv2.cvtColor(output, cv2.COLOR_BGR2RGB)
+                            cv2.imwrite(os.path.join(self.cfg.test_output_path, dataset_test.slide+'.png'), output)
+                            # writer_info.update(mask=mask_rgb, prediction=predictions_rgb)
+                            start_time = time.time()
+                            # break
+                        data_time.reset()
+                        batch_time.reset()
+                        scores_test = tester.get_scores()
+                        tester.reset_metrics()
 
                     # save model
                     best_pred = save_ckpt_model(model, self.cfg, scores_val, best_pred, epoch)
@@ -200,14 +233,17 @@ class Runner:
                             mIOU={
                                 "train": scores_train["iou_mean"],
                                 "val": scores_val["iou_mean"],
+                                "test": scores_test["iou_mean"],
                             },
                             mucosa_iou={
                                 "train": scores_train["iou"][2],
                                 "val": scores_val["iou"][2],
+                                "test": scores_test["iou"][2],
                             },
                             tumor_iou={
                                 "train": scores_train["iou"][3],
                                 "val": scores_val["iou"][3],
+                                "test": scores_test["iou"][3],
                             },
                         )
                     else:
@@ -217,10 +253,12 @@ class Runner:
                             mIOU={
                                 "train": scores_train["iou_mean"],
                                 "val": scores_val["iou_mean"],
+                                "test": scores_test["iou_mean"],
                             },
                             merge_iou={
                                 "train": scores_train["iou"][2],
                                 "val": scores_val["iou"][2],
+                                "test": scores_test["iou"][2],
                             },
                         )
                     update_writer(writer, writer_info, epoch)

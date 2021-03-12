@@ -7,7 +7,7 @@ from helper.runner_weak import argParser, seed_everything, Runner
 from dataset.dataset_local import OralDatasetLocal, collate
 from dataset.dataset import OralSlide
 from utils.seg_loss import *
-from helper.helper_weak_unet import Trainer, Evaluator, save_ckpt_model, update_log, update_writer, get_optimizer, create_model_load_weights
+from helper.helper_weak_unet import Trainer, Evaluator, SlideInference, save_ckpt_model, update_log, update_writer, get_optimizer, create_model_load_weights
 from dataset.transformer import TransformerMerge, TransformerMergeVal
 from configs.config_local_merge_weak_unet import Config
 from models.segmentor.weakUNet import WeakUnet
@@ -84,7 +84,7 @@ runner.train(dataset_train,
             Evaluator, 
             collate,
             dataset_test=dataset_test,
-           tester_func=Evaluator)
+            tester_func=SlideInference)
 
 
 

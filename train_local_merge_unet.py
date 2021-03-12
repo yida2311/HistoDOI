@@ -5,8 +5,9 @@ import torch.nn as nn
 from models.segmentor.dynamicUNet import Unet
 from dataset.transformer import TransformerMerge, TransformerMergeVal
 from dataset.dataset_local import OralDatasetLocal, collate
+from dataset.dataset import OralSlide
 from utils.seg_loss import FocalLoss, SymmetricCrossEntropyLoss, DecoupledSegLoss_v1, DecoupledSegLoss_v2
-from helper.helper_unet import Trainer, Evaluator, save_ckpt_model, update_log, update_writer, get_optimizer, create_model_load_weights
+from helper.helper_unet import Trainer, Evaluator, SlideInference, save_ckpt_model, update_log, update_writer, get_optimizer, create_model_load_weights
 from configs.config_local_merge_unet import Config
 from helper.runner import argParser, seed_everything, Runner
 
@@ -29,6 +30,7 @@ batch_size = cfg.batch_size
 num_workers = cfg.num_workers
 trainset_cfg = cfg.trainset_cfg
 valset_cfg = cfg.valset_cfg
+testset_cfg = cfg.testset_cfg
 
 transformer_train = TransformerMerge()
 dataset_train = OralDatasetLocal(
@@ -47,6 +49,17 @@ dataset_val = OralDatasetLocal(
     transform=transformer_val
 )
 
+transformer_test = TransformerMergeVal()
+slide_list = sorted(os.listdir(testset_cfg["img_dir"]))
+dataset_test = OralSlide(
+    slide_list,
+    testset_cfg["img_dir"],
+    testset_cfg["meta_file"],
+    slide_mask_dir=testset_cfg["mask_dir"],
+    label=testset_cfg["label"], 
+    transform=transformer_test,
+)
+
 if cfg.loss == "ce":
     criterion = nn.CrossEntropyLoss(reduction='mean')
 elif cfg.loss == "sce":
@@ -61,7 +74,15 @@ elif cfg.loss == 'decouple-v1':
 elif cfg.loss == 'decouple-v2':
     criterion = DecoupledSegLoss_v2(alpha=cfg.loss_cfg['sce']['alpha'], beta=cfg.loss_cfg['sce']['beta'], gamma=cfg.loss_cfg['focal']['gamma'], num_classes=cfg.n_class)
     
-runner.train(dataset_train, dataset_val, criterion, get_optimizer, Trainer, Evaluator, collate)
+runner.train(dataset_train, 
+            dataset_val, 
+            criterion, 
+            get_optimizer, 
+            Trainer, 
+            Evaluator, 
+            collate,
+            dataset_test=dataset_test,
+            tester_func=SlideInference)
 
 
 
