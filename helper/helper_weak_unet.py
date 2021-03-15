@@ -71,7 +71,6 @@ def create_model_load_weights(model, device, distributed=False, local_rank=0, ev
         state = model.state_dict()
         state.update(state_dict)
         model.load_state_dict(state)
-    
     if distributed:
         model = nn.SyncBatchNorm.convert_sync_batchnorm(model)
         model.to(device)
@@ -244,7 +243,7 @@ class Evaluator(object):
         imgs = sample['image']
         with torch.no_grad():
             imgs = imgs.cuda()
-            preds = model.forward(imgs)
+            preds, _, _ = model.forward(imgs)
             preds = F.interpolate(preds, size=(imgs.size(2), imgs.size(3)), mode='bilinear')
             outputs = preds.cpu().detach().numpy()
             predictions = np.argmax(outputs, axis=1)
@@ -281,7 +280,7 @@ class SlideInference(object):
             coord = sample['coord']
             with torch.no_grad():
                 imgs = imgs.cuda()
-                preds = model.forward(imgs)
+                preds, _, _ = model.forward(imgs)
                 preds = F.interpolate(preds, size=(imgs.size(2), imgs.size(3)), mode='bilinear')
                 preds_np = preds.cpu().detach().numpy()
             _, _, h, w = preds_np.shape

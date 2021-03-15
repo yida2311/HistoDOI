@@ -30,10 +30,17 @@ class Config:
             "meta_file": root + "val.csv",
             "label": True,
         }
+        test_root = '/media/ldy/7E1CA94545711AE6/OSCC-王/fine/processed data/full_anno/'
+        self.testset_cfg = {
+            "img_dir": test_root +  "5x_tile/5x_800/patch/",
+            "mask_dir": test_root + "std_mask_slide/",
+            "meta_file": test_root + "5x_tile/5x_800/tile_info.json",
+            "label": True,
+        }
         self.slideset_cfg = {  # for slide level inference
             "img_dir": root + "patch/",
             "meta_file": root + "tile_info.json",
-            "mask_dir": '/media/ldy/e5a10f4e-18fd-4656-80d8-055bc4078655/OSCC-Tile-v3/5x_mask/std_mask/',
+            "mask_dir": '/media/ldy/e5a10f4e-18fd-4656-80d8-055bc4078655/OSCC-Tile-v3/5x_1000/' + "std_mask/",
             "label": True,
         }
 
@@ -43,7 +50,7 @@ class Config:
         self.num_epochs = 120
         self.warmup_epochs = 2
         self.batch_size = 4
-        self.ckpt_path = None #"/home/ldy/HistoDOI/results-v3/saved_models/unet-resnet34-sce-poly-0.0001-150-[10-13-01]-train/unet-resnet34-129-0.88217.pth" # pretrained model
+        self.ckpt_path = '/home/ldy/HistoDOI/results-v3/saved_models/unet-patch-merge-resnet34-ce-poly-0.0001-120-[12-23-18]-train/unet-resnet34-112-0.92811.pth' # pretrained model
         self.num_workers = 4
         self.evaluation = True  # evaluatie val set
         self.val_vis = True # val result visualization
@@ -75,6 +82,7 @@ class Config:
         self.model_path = out_root + "saved_models/" + self.task_name
         self.log_path = out_root + "logs/" 
         self.writer_path = out_root + 'writers/' + self.task_name
-        self.output_path = out_root + "predictions/" + self.task_name
+        self.val_output_path = out_root + "predictions/" + self.task_name + '/val'
+        self.test_output_path = out_root + "predictions/" + self.task_name + '/test'
 
         

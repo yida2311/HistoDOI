@@ -67,8 +67,10 @@ class ConfusionMatrixSeg(object):
         self.confusion_matrix = np.zeros((n_classes, n_classes))
 
     def _fast_hist(self, label_true, label_pred, n_class):
-        mask = (label_true >= 0) & (label_true < n_class)
-        hist = np.bincount(n_class * label_true[mask].astype(int) + label_pred[mask], minlength=n_class**2).reshape(n_class, n_class)
+        label_true[label_true>=n_class] = n_class-1
+        hist = np.bincount(n_class * label_true.astype(int) + label_pred, minlength=n_class**2).reshape(n_class, n_class)
+        # mask = (label_true >= 0) & (label_true < n_class)
+        # hist = np.bincount(n_class * label_true[mask].astype(int) + label_pred[mask], minlength=n_class**2).reshape(n_class, n_class)
         return hist
 
     def update(self, label_trues, label_preds):

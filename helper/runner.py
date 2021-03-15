@@ -266,7 +266,7 @@ class Runner:
             f_log.close()
         
     
-    def eval_slide(self, dataset, evaluator_func):
+    def eval_slide(self, dataset, evaluator_func, output_path):
         print("preparing datasets and dataloaders......")
         evaluation = self.cfg.slideset_cfg["label"]
         slide_time = AverageMeter("DataTime", ':3.3f')
@@ -284,7 +284,7 @@ class Runner:
             dataset.get_patches_from_index(i)
             prediction, output, _ = evaluator.inference(dataset, model)
             output = cv2.cvtColor(output, cv2.COLOR_BGR2RGB)
-            cv2.imwrite(os.path.join(self.cfg.output_path, dataset.slide+'.png'), output)
+            cv2.imwrite(os.path.join(output_path, dataset.slide+'.png'), output)
             slide_time.update(time.time()-start_time)
         
             if evaluation:
@@ -300,7 +300,7 @@ class Runner:
             print(evaluator.metrics.confusion_matrix)
 
         log = ""
-        log = log + str(task_name) + '   slide inference \n'
+        log = log + str(self.cfg.task_name) + '   slide inference \n'
         if evaluation:
             log = log + "mIOU = " + str(scores['iou_mean']) + '\n'
             log = log + "IOU: " + str(scores['iou']) + '\n'

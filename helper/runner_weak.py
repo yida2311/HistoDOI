@@ -1,4 +1,4 @@
--import os
+import os
 import time
 import random
 import cv2
@@ -309,7 +309,6 @@ class Runner:
         print("preparing datasets and dataloaders......")
         evaluation = self.cfg.slideset_cfg["label"]
         slide_time = AverageMeter("DataTime", ':3.3f')
-        
         model = self.model_loader(self.model, device=self.device, evaluation=True, ckpt_path=self.cfg.ckpt_path)
         model = model.cuda()
         f_log = open(self.cfg.log_path + self.cfg.task_name +  "_slide_test.log", 'w')
@@ -339,7 +338,7 @@ class Runner:
             print(evaluator.metrics.confusion_matrix)
 
         log = ""
-        log = log + str(task_name) + '  slide inference \n'
+        log = log + str(self.cfg.task_name) + '  slide inference \n'
         if evaluation:
             log = log + "mIOU = " + str(scores['iou_mean']) + '\n'
             log = log + "IOU: " + str(scores['iou']) + '\n'
