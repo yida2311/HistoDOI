@@ -10,7 +10,7 @@ from configs.config_patch_merge_unet import Config
 
 
 distributed = False
-cfg = Config(mode='patch', train=False)
+cfg = Config(mode='patch-merge', train=False)
 model = Unet(classes=cfg.n_class, encoder_name=cfg.encoder, **cfg.model_cfg)
 runner = Runner(cfg, model, create_model_load_weights, distributed=distributed)
 
