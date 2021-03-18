@@ -30,11 +30,11 @@ class Config:
             "meta_file": root + "val_local.csv",
             "label": True,
         }
-        test_root = '/disk2/ldy/fine/5x_tile/5x_800/'
+        test_root = '/disk2/ldy/fine/'
         self.testset_cfg = {
-            "img_dir": root +  "patch/",
-            "mask_dir": root + "std_mask/",
-            "meta_file": root + "tile_info.json",
+            "img_dir": test_root +  "5x_tile/5x_800/patch/",
+            "mask_dir": test_root + "std_mask_slide/",
+            "meta_file": test_root + "5x_tile/5x_800/tile_info.json",
             "label": True,
         }
         self.slideset_cfg = {  # for slide level inference
@@ -50,7 +50,7 @@ class Config:
         self.num_epochs = 120
         self.warmup_epochs = 2
         self.batch_size = 4
-        self.ckpt_path = None #"/home/ldy/HistoDOI/results-v3/saved_models/unet-resnet34-sce-poly-0.0001-150-[10-13-01]-train/unet-resnet34-129-0.88217.pth" # pretrained model
+        self.ckpt_path = '/home/ldy/HistoDOI/results-v3/saved_models/unet-local-resnet34-ce-poly-0.0001-120-[12-24-23]-train/unet-resnet34-107-0.86415.pth' # pretrained model
         self.num_workers = 4
         self.evaluation = True  # evaluatie val set
         self.val_vis = True # val result visualization

@@ -6,11 +6,11 @@ from dataset.transformer import TransformerVal
 from dataset.dataset import OralSlide, collate
 from helper.helper_unet import SlideInference, create_model_load_weights
 from helper.runner import Runner
-from configs.config_local_unet import Config
+from configs.config_global_unet import Config
 
 
 distributed = False
-cfg = Config(mode='local', train=False)
+cfg = Config(mode='global', train=False)
 model = Unet(classes=cfg.n_class, encoder_name=cfg.encoder, **cfg.model_cfg)
 runner = Runner(cfg, model, create_model_load_weights, distributed=distributed)
 
